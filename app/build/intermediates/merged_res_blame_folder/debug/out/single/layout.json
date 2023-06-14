@@ -1,0 +1,14 @@
+[
+    {
+        "merged": "C:\\Users\\gj7qc9\\AndroidStudioProjects\\android_adas_app\\app\\build\\intermediates\\incremental\\mergeDebugResources\\stripped.dir\\layout\\activity_main.xml",
+        "source": "C:\\Users\\gj7qc9\\AndroidStudioProjects\\android_adas_app\\app\\src\\main\\res\\layout\\activity_main.xml"
+    },
+    {
+        "merged": "C:\\Users\\gj7qc9\\AndroidStudioProjects\\android_adas_app\\app\\build\\intermediates\\incremental\\mergeDebugResources\\stripped.dir\\layout\\fragment_camera.xml",
+        "source": "C:\\Users\\gj7qc9\\AndroidStudioProjects\\android_adas_app\\app\\src\\main\\res\\layout\\fragment_camera.xml"
+    },
+    {
+        "merged": "C:\\Users\\gj7qc9\\AndroidStudioProjects\\android_adas_app\\app\\build\\intermediates\\incremental\\mergeDebugResources\\stripped.dir\\layout\\info_bottom_sheet.xml",
+        "source": "C:\\Users\\gj7qc9\\AndroidStudioProjects\\android_adas_app\\app\\src\\main\\res\\layout\\info_bottom_sheet.xml"
+    }
+]
