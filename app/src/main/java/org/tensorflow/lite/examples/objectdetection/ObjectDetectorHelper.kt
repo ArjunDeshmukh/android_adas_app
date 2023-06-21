@@ -44,6 +44,12 @@ class ObjectDetectorHelper(
     // Flag to indicate if one picture has been taken
     private var f_pic_taken: Boolean = false
 
+    // Previous time step cell phone bounding box width
+    private var cell_phone_width_prev: Float? = null
+
+    // Previous timestamp in milliseconds
+    private var previousTimeStamp: Long? = null
+
     init {
         setupObjectDetector()
     }
@@ -56,7 +62,7 @@ class ObjectDetectorHelper(
     // thread that is using it. CPU and NNAPI delegates can be used with detectors
     // that are created on the main thread and used on a background thread, but
     // the GPU delegate needs to be used on the thread that initialized the detector
-    fun setupObjectDetector() {
+    private fun setupObjectDetector() {
         // Create the base options for the detector using specifies max results and score threshold
         val optionsBuilder =
             ObjectDetector.ObjectDetectorOptions.builder()
@@ -135,19 +141,51 @@ class ObjectDetectorHelper(
             tensorImage.height,
             tensorImage.width)
 
-        // Find if any object is a cell phone. If yes, take a picture
+        findAnObject(results, "cell phone")
+    }
+
+    private fun findAnObject(results:  MutableList<Detection>?, obj: String){
+        // Find if specified object is present. If yes, take a picture
+        var cell_phone_width: Float
+        var cell_phone_width_chng_ratio: Float = 0.0F
+        var f_cell_detected: Boolean = false
+        var timeGap: Long = 0L
+
         if (results != null) {
             for (result in results){
                 for (category in result.categories){
-                    if (category.label == "cell phone"){
-                        if(!f_pic_taken)
-                        {
+                    if (category.label == obj){
+                        f_cell_detected = true
+                        if(!f_pic_taken) {
                             objectDetectorListener?.takePhoto()
                             f_pic_taken = true
                         }
+
+                        cell_phone_width = result.boundingBox.right - result.boundingBox.left
+                        if(cell_phone_width_prev != null && cell_phone_width_prev != 0.0F){
+                            cell_phone_width_chng_ratio = cell_phone_width/ cell_phone_width_prev!!
+                        }
+
+                        val currentInstant: java.time.Instant = java.time.Instant.now()
+                        val currentTimeStamp: Long = currentInstant.toEpochMilli()
+                        if(previousTimeStamp != null){
+                            timeGap = currentTimeStamp - previousTimeStamp!!
+                        }
+
+                        Log.i("ObjectDetectorHelper",
+                            "Width: $cell_phone_width TimeStep Millisec: $timeGap"
+                        )
+
+                        cell_phone_width_prev = cell_phone_width
+                        previousTimeStamp = currentTimeStamp
+
                     }
                 }
             }
+        }
+
+        if(!f_cell_detected){
+            cell_phone_width_prev = 0.0F
         }
     }
 
@@ -175,3 +213,4 @@ class ObjectDetectorHelper(
         const val MODEL_MOBILENETV1_FP32 = 5
     }
 }
+

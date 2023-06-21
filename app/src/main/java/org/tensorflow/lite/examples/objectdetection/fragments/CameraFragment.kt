@@ -21,6 +21,7 @@ import android.content.ContentValues
 import android.content.ContextWrapper
 import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.hardware.camera2.CameraCharacteristics
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
@@ -34,8 +35,10 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.Toast
+import androidx.camera.camera2.interop.Camera2CameraInfo
 import androidx.camera.core.AspectRatio
 import androidx.camera.core.Camera
+import androidx.camera.core.CameraInfo
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888
@@ -307,6 +310,12 @@ class CameraFragment : Fragment(), ObjectDetectorHelper.DetectorListener {
                 FallbackStrategy.higherQualityOrLowerThan(Quality.SD)))
             .build()
         videoCapture = androidx.camera.video.VideoCapture.withOutput(recorder)
+
+        val cameraInfo = cameraProvider.availableCameraInfos.first()
+        val focalLengths = Camera2CameraInfo.from(cameraInfo)
+            .getCameraCharacteristic(
+                CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS
+            )
 
         // Must unbind the use-cases before rebinding them
         cameraProvider.unbindAll()
