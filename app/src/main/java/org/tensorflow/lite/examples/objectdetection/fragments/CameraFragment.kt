@@ -19,8 +19,13 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.content.ContextWrapper
+import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.hardware.camera2.CameraCharacteristics
 import android.os.Build
 import android.os.Bundle
@@ -58,6 +63,7 @@ import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.rotationMatrix
 import androidx.fragment.app.Fragment
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.navigation.Navigation
 import java.util.LinkedList
 import java.util.concurrent.ExecutorService
@@ -70,6 +76,7 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.math.roundToInt
 
 class CameraFragment : Fragment(), ObjectDetectorHelper.DetectorListener {
 
@@ -103,6 +110,7 @@ class CameraFragment : Fragment(), ObjectDetectorHelper.DetectorListener {
             Navigation.findNavController(requireActivity(), R.id.fragment_container)
                 .navigate(CameraFragmentDirections.actionCameraToPermissions())
         }
+
     }
 
     override fun onDestroyView() {
@@ -114,9 +122,9 @@ class CameraFragment : Fragment(), ObjectDetectorHelper.DetectorListener {
     }
 
     override fun onCreateView(
-      inflater: LayoutInflater,
-      container: ViewGroup?,
-      savedInstanceState: Bundle?
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
     ): View {
         _fragmentCameraBinding = FragmentCameraBinding.inflate(inflater, container, false)
 
@@ -129,7 +137,8 @@ class CameraFragment : Fragment(), ObjectDetectorHelper.DetectorListener {
 
         objectDetectorHelper = ObjectDetectorHelper(
             context = requireContext(),
-            objectDetectorListener = this)
+            objectDetectorListener = this
+        )
 
         // Initialize our background executor
         cameraExecutor = Executors.newSingleThreadExecutor()
@@ -272,8 +281,8 @@ class CameraFragment : Fragment(), ObjectDetectorHelper.DetectorListener {
                 .setTargetRotation(fragmentCameraBinding.viewFinder.display.rotation)
                 .build()
                 .also {
-                        it.setSurfaceProvider(fragmentCameraBinding.viewFinder.surfaceProvider)
-                      }
+                    it.setSurfaceProvider(fragmentCameraBinding.viewFinder.surfaceProvider)
+                }
 
 
         // ImageAnalysis. Using RGBA 8888 to match how our models work
@@ -293,9 +302,9 @@ class CameraFragment : Fragment(), ObjectDetectorHelper.DetectorListener {
                             //image.imageInfo.sensorToBufferTransformMatrix = Matrix
                             //var rotMat = rotationMatrix(90F, 0.0F, 0.0F)
                             bitmapBuffer = Bitmap.createBitmap(
-                              image.width,
-                              image.height,
-                              Bitmap.Config.ARGB_8888
+                                image.width,
+                                image.height,
+                                Bitmap.Config.ARGB_8888
                             )
                         }
 
@@ -306,8 +315,12 @@ class CameraFragment : Fragment(), ObjectDetectorHelper.DetectorListener {
         imageCapture = ImageCapture.Builder().build()
 
         val recorder = Recorder.Builder()
-            .setQualitySelector(QualitySelector.from(Quality.HIGHEST,
-                FallbackStrategy.higherQualityOrLowerThan(Quality.SD)))
+            .setQualitySelector(
+                QualitySelector.from(
+                    Quality.HIGHEST,
+                    FallbackStrategy.higherQualityOrLowerThan(Quality.SD)
+                )
+            )
             .build()
         videoCapture = androidx.camera.video.VideoCapture.withOutput(recorder)
 
@@ -323,7 +336,13 @@ class CameraFragment : Fragment(), ObjectDetectorHelper.DetectorListener {
         try {
             // A variable number of use-cases can be passed here -
             // camera provides access to CameraControl & CameraInfo
-            camera = cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalyzer, imageCapture)
+            camera = cameraProvider.bindToLifecycle(
+                this,
+                cameraSelector,
+                preview,
+                imageAnalyzer,
+                imageCapture
+            )
 
             // Attach the viewfinder's surface provider to preview use case
             //preview?.setSurfaceProvider(fragmentCameraBinding.viewFinder.surfaceProvider)
@@ -349,14 +368,14 @@ class CameraFragment : Fragment(), ObjectDetectorHelper.DetectorListener {
     // Update UI after objects have been detected. Extracts original image height/width
     // to scale and place bounding boxes properly through OverlayView
     override fun onResults(
-      results: MutableList<Detection>?,
-      inferenceTime: Long,
-      imageHeight: Int,
-      imageWidth: Int
+        results: MutableList<Detection>?,
+        inferenceTime: Long,
+        imageHeight: Int,
+        imageWidth: Int
     ) {
         activity?.runOnUiThread {
             fragmentCameraBinding.bottomSheetLayout.inferenceTimeVal.text =
-                            String.format("%d ms", inferenceTime)
+                String.format("%d ms", inferenceTime)
 
             // Pass necessary information to OverlayView for drawing on the canvas
             fragmentCameraBinding.overlay.setResults(
@@ -386,7 +405,7 @@ class CameraFragment : Fragment(), ObjectDetectorHelper.DetectorListener {
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
             put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-            if(Build.VERSION.SDK_INT > Build.VERSION_CODES.P) {
+            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.P) {
                 put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CameraX-Image")
             }
         }
@@ -397,7 +416,8 @@ class CameraFragment : Fragment(), ObjectDetectorHelper.DetectorListener {
                 .Builder(
                     it.contentResolver,
                     MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                    contentValues)
+                    contentValues
+                )
                 .build()
         }
 
@@ -414,9 +434,13 @@ class CameraFragment : Fragment(), ObjectDetectorHelper.DetectorListener {
 
                     @SuppressLint("RestrictedApi")
                     override fun
-                            onImageSaved(output: ImageCapture.OutputFileResults){
+                            onImageSaved(output: ImageCapture.OutputFileResults) {
                         val msg = "Photo capture succeeded: ${output.savedUri}"
-                        Toast.makeText(getBaseContext(ContextWrapper(requireContext())), msg, Toast.LENGTH_SHORT).show()
+                        Toast.makeText(
+                            getBaseContext(ContextWrapper(requireContext())),
+                            msg,
+                            Toast.LENGTH_SHORT
+                        ).show()
                         Log.d(TAG, msg)
                     }
                 }
@@ -428,3 +452,5 @@ class CameraFragment : Fragment(), ObjectDetectorHelper.DetectorListener {
         private const val FILENAME_FORMAT = "yyyy-MM-dd-HH-mm-ss-SSS"
     }
 }
+
+

@@ -25,8 +25,8 @@ android {
     defaultConfig {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         applicationId "org.tensorflow.lite.examples.objectdetection"
-        minSdk 33
-        targetSdkVersion 33
+        minSdk 28
+        targetSdkVersion 31
         versionCode 1
         versionName "1.0.0"
     }

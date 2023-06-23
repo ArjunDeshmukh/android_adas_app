@@ -15,8 +15,13 @@
  */
 package org.tensorflow.lite.examples.objectdetection
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Bitmap
+import android.hardware.SensorManager
+import android.hardware.Sensor
 import android.os.SystemClock
 import android.util.Log
 import org.tensorflow.lite.gpu.CompatibilityList
@@ -50,12 +55,20 @@ class ObjectDetectorHelper(
     // Previous timestamp in milliseconds
     private var previousTimeStamp: Long? = null
 
+
+    private var sensorManager: SensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    
+    private var sensorlistenerobject = SensorListenerClass()
+    
+
     init {
         setupObjectDetector()
     }
 
     fun clearObjectDetector() {
         objectDetector = null
+
+        sensorManager.unregisterListener(sensorlistenerobject)
     }
 
     // Initialize the object detector using current settings on the
@@ -111,6 +124,24 @@ class ObjectDetectorHelper(
             )
             Log.e("Test", "TFLite failed to load model with error: " + e.message)
         }
+
+        sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.also { accelerometer ->
+            sensorManager.registerListener(
+                sensorlistenerobject,
+                accelerometer,
+                SensorManager.SENSOR_DELAY_NORMAL,
+                SensorManager.SENSOR_DELAY_UI
+            )
+        }
+
+        sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)?.also { magneticField ->
+            sensorManager.registerListener(
+                sensorlistenerobject,
+                magneticField,
+                SensorManager.SENSOR_DELAY_NORMAL,
+                SensorManager.SENSOR_DELAY_UI
+            )
+        }
     }
 
     fun detect(image: Bitmap, imageRotation: Int) {
@@ -142,6 +173,17 @@ class ObjectDetectorHelper(
             tensorImage.width)
 
         findAnObject(results, "cell phone")
+
+        val orientationAngles = sensorlistenerobject.getOrientationAngles()
+        val accelerometerReading = sensorlistenerobject.getAccelerometerReading()
+
+        // "Orientation Angles: ${orientationAngles[0]}, ${orientationAngles[1]}, ${orientationAngles[2]}," +
+
+        Log.i("ObjectDetectorHelper",
+                    "Accelerometer Reading: ${accelerometerReading[0]}, ${accelerometerReading[1]}, ${accelerometerReading[2]}"
+        )
+
+
     }
 
     private fun findAnObject(results:  MutableList<Detection>?, obj: String){
@@ -172,9 +214,9 @@ class ObjectDetectorHelper(
                             timeGap = currentTimeStamp - previousTimeStamp!!
                         }
 
-                        Log.i("ObjectDetectorHelper",
-                            "Width: $cell_phone_width TimeStep Millisec: $timeGap"
-                        )
+                        //Log.i("ObjectDetectorHelper",
+                        //    "Width: $cell_phone_width TimeStep Millisec: $timeGap"
+                        //)
 
                         cell_phone_width_prev = cell_phone_width
                         previousTimeStamp = currentTimeStamp
