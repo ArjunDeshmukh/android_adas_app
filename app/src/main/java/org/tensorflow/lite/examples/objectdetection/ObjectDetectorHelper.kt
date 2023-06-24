@@ -22,6 +22,7 @@ import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.hardware.SensorManager
 import android.hardware.Sensor
+import android.media.RingtoneManager
 import android.os.SystemClock
 import android.util.Log
 import org.tensorflow.lite.gpu.CompatibilityList
@@ -59,7 +60,9 @@ class ObjectDetectorHelper(
     private var sensorManager: SensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     
     private var sensorlistenerobject = SensorListenerClass()
-    
+
+    private val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+    private val ringtone = RingtoneManager.getRingtone(context, defaultSoundUri)
 
     init {
         setupObjectDetector()
@@ -172,26 +175,34 @@ class ObjectDetectorHelper(
             tensorImage.height,
             tensorImage.width)
 
-        findAnObject(results, "cell phone")
+        findAnObject(results, "person")
 
-        val orientationAngles = sensorlistenerobject.getOrientationAngles()
+        //val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+
+
+        /*
+        * val orientationAngles = sensorlistenerobject.getOrientationAngles()
         val accelerometerReading = sensorlistenerobject.getAccelerometerReading()
 
         // "Orientation Angles: ${orientationAngles[0]}, ${orientationAngles[1]}, ${orientationAngles[2]}," +
+        //"Accelerometer Reading: ${accelerometerReading[0]}, ${accelerometerReading[1]}, ${accelerometerReading[2]}"
 
         Log.i("ObjectDetectorHelper",
-                    "Accelerometer Reading: ${accelerometerReading[0]}, ${accelerometerReading[1]}, ${accelerometerReading[2]}"
+            "Orientation Angles: ${orientationAngles[0]}, ${orientationAngles[1]}, ${orientationAngles[2]}"
         )
-
+        * */
 
     }
 
     private fun findAnObject(results:  MutableList<Detection>?, obj: String){
         // Find if specified object is present. If yes, take a picture
+        var cell_phone_width_meas: Float
         var cell_phone_width: Float
+        var width_filt_coeff: Float = 0.5F
         var cell_phone_width_chng_ratio: Float = 0.0F
         var f_cell_detected: Boolean = false
         var timeGap: Long = 0L
+        var timeToCollision: Float = 0.0F
 
         if (results != null) {
             for (result in results){
@@ -204,7 +215,9 @@ class ObjectDetectorHelper(
                         }
 
                         cell_phone_width = result.boundingBox.right - result.boundingBox.left
+
                         if(cell_phone_width_prev != null && cell_phone_width_prev != 0.0F){
+                            //cell_phone_width = cell_phone_width_prev?.plus(width_filt_coeff*(cell_phone_width_meas - cell_phone_width_prev!!))!!
                             cell_phone_width_chng_ratio = cell_phone_width/ cell_phone_width_prev!!
                         }
 
@@ -214,20 +227,39 @@ class ObjectDetectorHelper(
                             timeGap = currentTimeStamp - previousTimeStamp!!
                         }
 
-                        //Log.i("ObjectDetectorHelper",
-                        //    "Width: $cell_phone_width TimeStep Millisec: $timeGap"
-                        //)
+                        timeToCollision = if(cell_phone_width_chng_ratio > 1.0F){
+                            timeGap.toFloat()*MILLISEC_TO_SEC/(cell_phone_width_chng_ratio - 1.0F)
+                        } else{
+                            INFINITY
+                        }
+
+                        Log.i("ObjectDetectorHelper",
+                            "Width ratio of object: $cell_phone_width_chng_ratio, Time To Collision of $obj is $timeToCollision, Time Gap between detections: " +
+                                    "$timeGap ms"
+                        )
+
+                        if(timeToCollision < 2.0F)
+                        {
+                            ringtone.play()
+                        }
+                        else
+                        {
+                            ringtone.stop()
+                        }
 
                         cell_phone_width_prev = cell_phone_width
                         previousTimeStamp = currentTimeStamp
 
                     }
+                    if(f_cell_detected){break}
                 }
+                if(f_cell_detected){break}
             }
         }
 
         if(!f_cell_detected){
             cell_phone_width_prev = 0.0F
+
         }
     }
 
@@ -253,6 +285,10 @@ class ObjectDetectorHelper(
         const val MODEL_EFFICIENTDETV2 = 3
         const val MODEL_MOBILEOBJECTLOCALV1 = 4
         const val MODEL_MOBILENETV1_FP32 = 5
+
+        const val MILLISEC_TO_SEC: Float = 1.0E-3F
+        const val INFINITY: Float = 1000000F
+
     }
 }
 
