@@ -15,14 +15,13 @@
  */
 package org.tensorflow.lite.examples.objectdetection
 
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.graphics.Bitmap
-import android.hardware.SensorManager
 import android.hardware.Sensor
+import android.hardware.SensorManager
+import android.media.AudioManager
 import android.media.RingtoneManager
+import android.media.ToneGenerator
 import android.os.SystemClock
 import android.util.Log
 import org.tensorflow.lite.gpu.CompatibilityList
@@ -32,6 +31,9 @@ import org.tensorflow.lite.support.image.ops.Rot90Op
 import org.tensorflow.lite.task.core.BaseOptions
 import org.tensorflow.lite.task.vision.detector.Detection
 import org.tensorflow.lite.task.vision.detector.ObjectDetector
+import java.lang.Integer.max
+import java.lang.Integer.min
+
 
 class ObjectDetectorHelper(
   var threshold: Float = 0.5f,
@@ -61,8 +63,14 @@ class ObjectDetectorHelper(
     
     private var sensorlistenerobject = SensorListenerClass()
 
-    private val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-    private val ringtone = RingtoneManager.getRingtone(context, defaultSoundUri)
+    //private val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+    //private val ringtone = RingtoneManager.getRingtone(context, defaultSoundUri)
+
+    var toneGen1 = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
+
+    private var f_obj_width_inc_persistent: Boolean = false
+    private var obj_width_inc_cnt: Int = 0
+    private val k_obj_width_inc_cnt_thresh: Int = 3
 
     init {
         setupObjectDetector()
@@ -177,9 +185,6 @@ class ObjectDetectorHelper(
 
         findAnObject(results, "person")
 
-        //val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-
-
         /*
         * val orientationAngles = sensorlistenerobject.getOrientationAngles()
         val accelerometerReading = sensorlistenerobject.getAccelerometerReading()
@@ -221,30 +226,49 @@ class ObjectDetectorHelper(
                             cell_phone_width_chng_ratio = cell_phone_width/ cell_phone_width_prev!!
                         }
 
+                        if(cell_phone_width_chng_ratio > 1.0F)
+                        {
+                            obj_width_inc_cnt += 1
+                            obj_width_inc_cnt = min(obj_width_inc_cnt, 1000)
+                        }
+                        else
+                        {
+                            obj_width_inc_cnt = 0
+                        }
+
+                        f_obj_width_inc_persistent = obj_width_inc_cnt >= k_obj_width_inc_cnt_thresh
+
+                        if(f_obj_width_inc_persistent)
+                        {
+                            Log.i("ObjectDetectorHelper", "Cell Phone Width: $cell_phone_width , Count: $obj_width_inc_cnt")
+                        }
+
                         val currentInstant: java.time.Instant = java.time.Instant.now()
                         val currentTimeStamp: Long = currentInstant.toEpochMilli()
                         if(previousTimeStamp != null){
                             timeGap = currentTimeStamp - previousTimeStamp!!
                         }
 
-                        timeToCollision = if(cell_phone_width_chng_ratio > 1.0F){
+                        timeToCollision = if(f_obj_width_inc_persistent){
                             timeGap.toFloat()*MILLISEC_TO_SEC/(cell_phone_width_chng_ratio - 1.0F)
                         } else{
                             INFINITY
                         }
 
-                        Log.i("ObjectDetectorHelper",
-                            "Width ratio of object: $cell_phone_width_chng_ratio, Time To Collision of $obj is $timeToCollision, Time Gap between detections: " +
-                                    "$timeGap ms"
-                        )
+                        //Log.i("ObjectDetectorHelper",
+                        //    "Width ratio of object: $cell_phone_width_chng_ratio, Time To Collision of $obj is $timeToCollision, Time Gap between detections: " +
+                        //            "$timeGap ms"
+                        //)
+
 
                         if(timeToCollision < 2.0F)
                         {
-                            ringtone.play()
+                            toneGen1.startTone(ToneGenerator.TONE_CDMA_PIP,150);
+                            Log.i("ObjectDetectorHelper","Width ratio of object: $cell_phone_width_chng_ratio, Time To Collision of $obj is $timeToCollision, Time Gap between detections: " +
+                                        "$timeGap ms")
                         }
                         else
                         {
-                            ringtone.stop()
                         }
 
                         cell_phone_width_prev = cell_phone_width
@@ -259,6 +283,7 @@ class ObjectDetectorHelper(
 
         if(!f_cell_detected){
             cell_phone_width_prev = 0.0F
+            //Log.i("ObjectDetectorHelper", "Frame Missed")
 
         }
     }
