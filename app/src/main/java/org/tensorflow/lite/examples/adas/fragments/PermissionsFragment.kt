@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.tensorflow.lite.examples.objectdetection.fragments
+package org.tensorflow.lite.examples.adas.fragments
 
 import android.Manifest
 import android.content.Context
@@ -26,7 +26,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.Navigation
-import org.tensorflow.lite.examples.objectdetection.R
+import org.tensorflow.lite.examples.adas.R
 
 private val PERMISSIONS_REQUIRED = arrayOf(Manifest.permission.CAMERA)
 

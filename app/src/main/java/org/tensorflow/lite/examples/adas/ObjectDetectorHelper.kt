@@ -13,14 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.tensorflow.lite.examples.objectdetection
+package org.tensorflow.lite.examples.adas
 
 import android.content.Context
 import android.graphics.Bitmap
 import android.hardware.Sensor
 import android.hardware.SensorManager
 import android.media.AudioManager
-import android.media.RingtoneManager
 import android.media.ToneGenerator
 import android.os.SystemClock
 import android.util.Log
@@ -31,7 +30,6 @@ import org.tensorflow.lite.support.image.ops.Rot90Op
 import org.tensorflow.lite.task.core.BaseOptions
 import org.tensorflow.lite.task.vision.detector.Detection
 import org.tensorflow.lite.task.vision.detector.ObjectDetector
-import java.lang.Integer.max
 import java.lang.Integer.min
 
 

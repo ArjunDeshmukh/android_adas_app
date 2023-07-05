@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-package org.tensorflow.lite.examples.objectdetection
+package org.tensorflow.lite.examples.adas
 
 import android.os.Build
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
-import org.tensorflow.lite.examples.objectdetection.databinding.ActivityMainBinding
+import org.tensorflow.lite.examples.adas.databinding.ActivityMainBinding
 
 /**
  * Main entry point into our app. This app follows the single-activity pattern, and all

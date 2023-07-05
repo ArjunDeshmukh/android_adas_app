@@ -1,12 +1,10 @@
-package org.tensorflow.lite.examples.objectdetection
+package org.tensorflow.lite.examples.adas
 
-import android.content.Intent
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import kotlin.math.PI
-import kotlin.math.roundToInt
 
 class SensorListenerClass: SensorEventListener {
 

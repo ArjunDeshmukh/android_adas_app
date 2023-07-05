@@ -18,7 +18,7 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:dist="http://schemas.android.com/apk/distribution"
     xmlns:tools="http://schemas.android.com/tools"
-    package="org.tensorflow.lite.examples.objectdetection">
+    package="org.tensorflow.lite.examples.adas">
 
     <!-- Enable instant app support -->
     <dist:module dist:instant="true" />
@@ -38,7 +38,7 @@
         tools:ignore="AllowBackup">
 
         <activity
-            android:name=".MainActivity"
+            android:name="org.tensorflow.lite.examples.adas.MainActivity"
             android:clearTaskOnLaunch="true"
             android:theme="@style/AppTheme"
             android:exported="true"

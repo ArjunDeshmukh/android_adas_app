@@ -8,7 +8,7 @@
 
     <fragment
         android:id="@+id/permissions_fragment"
-        android:name="org.tensorflow.lite.examples.objectdetection.fragments.PermissionsFragment"
+        android:name="org.tensorflow.lite.examples.adas.fragments.PermissionsFragment"
         android:label="PermissionsFragment" >
 
         <action
@@ -21,7 +21,7 @@
 
     <fragment
         android:id="@+id/camera_fragment"
-        android:name="org.tensorflow.lite.examples.objectdetection.fragments.CameraFragment"
+        android:name="org.tensorflow.lite.examples.adas.fragments.CameraFragment"
         android:label="CameraFragment" >
 
 

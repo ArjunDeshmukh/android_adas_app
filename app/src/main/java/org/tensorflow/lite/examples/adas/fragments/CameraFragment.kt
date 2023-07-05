@@ -13,29 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.tensorflow.lite.examples.objectdetection.fragments
+package org.tensorflow.lite.examples.adas.fragments
 
-import android.Manifest
 import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.content.ContextWrapper
-import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Bitmap
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
-import android.hardware.SensorManager
 import android.hardware.camera2.CameraCharacteristics
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
 import android.view.LayoutInflater
-import android.view.Surface
-import android.view.Surface.ROTATION_0
-import android.view.Surface.ROTATION_270
-import android.view.Surface.ROTATION_90
 import android.view.View
 import android.view.ViewGroup
 import android.widget.AdapterView
@@ -43,7 +33,6 @@ import android.widget.Toast
 import androidx.camera.camera2.interop.Camera2CameraInfo
 import androidx.camera.core.AspectRatio
 import androidx.camera.core.Camera
-import androidx.camera.core.CameraInfo
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888
@@ -51,7 +40,6 @@ import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
-import androidx.camera.core.VideoCapture
 import androidx.camera.core.impl.utils.ContextUtil.getBaseContext
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.FallbackStrategy
@@ -59,24 +47,18 @@ import androidx.camera.video.Quality
 import androidx.camera.video.QualitySelector
 import androidx.camera.video.Recorder
 import androidx.camera.video.Recording
-import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
-import androidx.core.graphics.rotationMatrix
 import androidx.fragment.app.Fragment
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.navigation.Navigation
 import java.util.LinkedList
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import org.tensorflow.lite.examples.objectdetection.ObjectDetectorHelper
-import org.tensorflow.lite.examples.objectdetection.R
-import org.tensorflow.lite.examples.objectdetection.databinding.FragmentCameraBinding
+import org.tensorflow.lite.examples.adas.ObjectDetectorHelper
+import org.tensorflow.lite.examples.adas.R
+import org.tensorflow.lite.examples.adas.databinding.FragmentCameraBinding
 import org.tensorflow.lite.task.vision.detector.Detection
-import java.io.File
-import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
 import java.util.Locale
-import kotlin.math.roundToInt
 
 class CameraFragment : Fragment(), ObjectDetectorHelper.DetectorListener {
 

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.tensorflow.lite.examples.objectdetection
+package org.tensorflow.lite.examples.adas
 
 import android.content.res.AssetManager
 import android.graphics.Bitmap

@@ -28,7 +28,7 @@
 
     </androidx.camera.view.PreviewView>
 
-    <org.tensorflow.lite.examples.objectdetection.OverlayView
+    <org.tensorflow.lite.examples.adas.OverlayView
         android:id="@+id/overlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
