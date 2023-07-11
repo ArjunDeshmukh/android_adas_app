@@ -31,25 +31,16 @@ class KalmanTrack(initial_state: DoubleArray) {
             doubleArrayOf(0.0, 10.0)
         ), 2, 2) // observation error covariance
 
-        kf.P.setSubMatrix(arrayOf(
-            doubleArrayOf(1000.0, 0.0, 0.0, 0.0, 0.0, 0.0),
-            doubleArrayOf(0.0, 1000.0, 0.0, 0.0, 0.0, 0.0),
-            doubleArrayOf(0.0, 0.0, 1000.0, 0.0, 0.0, 0.0),
-            doubleArrayOf(0.0, 0.0, 0.0, 1000.0, 0.0, 0.0),
-            doubleArrayOf(0.0, 0.0, 0.0, 0.0, 10.0, 0.0),
-            doubleArrayOf(0.0, 0.0, 0.0, 0.0, 0.0, 10.0),
-            doubleArrayOf(0.0, 0.0, 0.0, 0.0, 0.0, 0.01)
-        ),4, 4) // initial velocity and location error covariance
 
-        kf.Q.setEntry(6, 6, 0.01) // process noise
-        kf.Q.setSubMatrix(arrayOf(
-            doubleArrayOf(0.01, 0.0, 0.0, 0.0),
-            doubleArrayOf(0.0, 0.01, 0.0, 0.0),
-            doubleArrayOf(0.0, 0.0, 0.01, 0.0),
-            doubleArrayOf(0.0, 0.0, 0.0, 0.01)
-        ), 4, 4) // process noise
+        kf.P.setSubMatrix(kf.P.getSubMatrix(4, 6, 4, 6).scalarMultiply(1000.0).data,
+            4, 4)  // initial velocity error covariance
+        kf.P = kf.P.scalarMultiply(10.0) // initial location error covariance
 
-        kf.x = MatrixUtils.createRealVector(xxyyToXysr(initial_state))   // initialize KalmanFilter state
+        kf.Q.multiplyEntry(6, 6, 0.01) // process noise
+        kf.Q.setSubMatrix(kf.Q.getSubMatrix(4, 6, 4, 6).scalarMultiply(0.01).data,
+            4, 4) // process noise
+
+        kf.x.setSubVector(0, MatrixUtils.createRealVector(xxyyToXysr(initial_state)))    // initialize KalmanFilter state
     }
 
     fun project(): DoubleArray {

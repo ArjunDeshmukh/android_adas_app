@@ -73,11 +73,11 @@ open class Tracker {
                 usedCols.add(col)
             }
         }
-        val unusedRows = setOf(0 until D.size).subtract(usedRows)
-        val unusedCols = setOf(0 until D[0].size).subtract(usedCols)
+        val unusedRows: Set<IntRange> = setOf(D.indices).subtract(usedRows) as Set<IntRange>
+        val unusedCols: Set<IntRange> = setOf(0 until D[0].size).subtract(usedCols) as Set<IntRange>
         if (D.size >= D[0].size) {
             for (row in unusedRows) {
-                val objectID = trackIDs[row as Int]
+                val objectID = trackIDs[row.first]
                 this.disappeared[objectID] = this.disappeared[objectID]!! + 1
                 if (this.disappeared[objectID]!! > this.maxDisappeared) {
                     this.deregister(objectID)
@@ -85,7 +85,7 @@ open class Tracker {
             }
         } else {
             for (col in unusedCols) {
-                this.register(detections[col as Int])
+                this.register(detections[col.first])
             }
         }
     }

@@ -23,6 +23,8 @@ import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.SystemClock
 import android.util.Log
+import org.apache.commons.math3.linear.MatrixUtils
+import org.tensorflow.lite.examples.adas.objecttracker.KalmanTracker
 import org.tensorflow.lite.gpu.CompatibilityList
 import org.tensorflow.lite.support.image.ImageProcessor
 import org.tensorflow.lite.support.image.TensorImage
@@ -31,6 +33,7 @@ import org.tensorflow.lite.task.core.BaseOptions
 import org.tensorflow.lite.task.vision.detector.Detection
 import org.tensorflow.lite.task.vision.detector.ObjectDetector
 import java.lang.Integer.min
+import org.apache.commons.math3.linear.RealVector
 
 
 class ObjectDetectorHelper(
@@ -63,6 +66,7 @@ class ObjectDetectorHelper(
 
     //private val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
     //private val ringtone = RingtoneManager.getRingtone(context, defaultSoundUri)
+    private var tracker = KalmanTracker()
 
     var toneGen1 = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
 
@@ -195,6 +199,8 @@ class ObjectDetectorHelper(
         )
         * */
 
+        //trackObjects(results)
+
     }
 
     private fun findAnObject(results:  MutableList<Detection>?, obj: String){
@@ -284,6 +290,21 @@ class ObjectDetectorHelper(
             //Log.i("ObjectDetectorHelper", "Frame Missed")
 
         }
+    }
+
+    private fun trackObjects(results: MutableList<Detection>?){
+
+        var detections: MutableList<RealVector> = listOf<RealVector>().toMutableList()
+
+        if (results != null) {
+            for (result in results) {
+                detections.add(MatrixUtils.createRealVector(doubleArrayOf(result.boundingBox.left.toDouble(), result.boundingBox.top.toDouble(),
+                    result.boundingBox.right.toDouble(), result.boundingBox.bottom.toDouble())))
+            }
+        }
+
+        var tracks = tracker.update(detections)
+
     }
 
     interface DetectorListener {
