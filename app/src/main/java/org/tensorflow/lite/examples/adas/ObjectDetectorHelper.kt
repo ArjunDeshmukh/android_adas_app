@@ -17,6 +17,7 @@ package org.tensorflow.lite.examples.adas
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.RectF
 import android.hardware.Sensor
 import android.hardware.SensorManager
 import android.media.AudioManager
@@ -34,6 +35,7 @@ import org.tensorflow.lite.task.vision.detector.Detection
 import org.tensorflow.lite.task.vision.detector.ObjectDetector
 import java.lang.Integer.min
 import org.apache.commons.math3.linear.RealVector
+import org.tensorflow.lite.support.label.Category
 
 
 class ObjectDetectorHelper(
@@ -178,14 +180,19 @@ class ObjectDetectorHelper(
         val tensorImage = imageProcessor.process(TensorImage.fromBitmap(image))
 
         val results = objectDetector?.detect(tensorImage)
+        val tracks = trackObjects(results)
+        val trackedResults = trackerOPtoModelOP(tracks)
+
         inferenceTime = SystemClock.uptimeMillis() - inferenceTime
         objectDetectorListener?.onResults(
-            results,
+            trackedResults,
             inferenceTime,
             tensorImage.height,
             tensorImage.width)
 
-        findAnObject(results, "person")
+        Log.i("ObjectDetectorHelper", "$results")
+
+        //findAnObject(results, "person")
 
         /*
         * val orientationAngles = sensorlistenerobject.getOrientationAngles()
@@ -199,7 +206,7 @@ class ObjectDetectorHelper(
         )
         * */
 
-        //trackObjects(results)
+
 
     }
 
@@ -292,18 +299,44 @@ class ObjectDetectorHelper(
         }
     }
 
-    private fun trackObjects(results: MutableList<Detection>?){
+    private fun trackObjects(results: MutableList<Detection>?):  List<Triple<Int, RealVector, Category>>{
+
+        val (detections, categories) = modelOPtoTrackerIP(results)
+
+        return tracker.update(detections, categories)
+
+    }
+
+    private fun modelOPtoTrackerIP(results: MutableList<Detection>?): Pair<MutableList<RealVector>, MutableList<Category>> {
 
         var detections: MutableList<RealVector> = listOf<RealVector>().toMutableList()
+        var categories: MutableList<Category> = listOf<Category>().toMutableList()
 
         if (results != null) {
             for (result in results) {
                 detections.add(MatrixUtils.createRealVector(doubleArrayOf(result.boundingBox.left.toDouble(), result.boundingBox.top.toDouble(),
                     result.boundingBox.right.toDouble(), result.boundingBox.bottom.toDouble())))
+                categories.add(result.categories[0])
             }
         }
 
-        var tracks = tracker.update(detections)
+        return Pair(detections, categories)
+    }
+
+    private fun trackerOPtoModelOP(tracks: List<Triple<Int, RealVector, Category>>): MutableList<Detection>? {
+
+        var trackedResults: MutableList<Detection>? = mutableListOf()
+
+        for (track in tracks)
+        {
+            var tempTrackedResult: Detection = Detection.create(RectF(track.second.getEntry(0).toFloat(), track.second.getEntry(1).toFloat(),
+                track.second.getEntry(2).toFloat(), track.second.getEntry(3).toFloat()), mutableListOf(track.third))
+
+            trackedResults?.add(tempTrackedResult)
+
+        }
+
+        return trackedResults
 
     }
 

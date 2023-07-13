@@ -4,7 +4,7 @@ import org.apache.commons.math3.linear.ArrayRealVector
 import org.apache.commons.math3.linear.MatrixUtils
 import java.util.LinkedHashMap
 import org.apache.commons.math3.linear.RealVector
-
+import org.tensorflow.lite.support.label.Category
 
 open class Tracker {
     /**
@@ -24,8 +24,8 @@ open class Tracker {
         this.maxDisappeared = maxDisappeared
     }
 
-    fun register(state: RealVector?) {
-        this.tracked[this.nextTrackID] = KalmanTrack(state!!.toArray())
+    fun register(state: RealVector?, category: Category) {
+        this.tracked[this.nextTrackID] = KalmanTrack(state!!.toArray(), category)
         this.disappeared[this.nextTrackID] = 0
         this.nextTrackID++
     }
@@ -45,24 +45,22 @@ open class Tracker {
         return this.tracked
     }
 
-    fun project(): List<Pair<Int, RealVector>> {
-        val tracks = ArrayList<Pair<Int, RealVector>>()
+    fun project(): List<Triple<Int, RealVector, Category>> {
+        val tracks = ArrayList<Triple<Int, RealVector, Category>>()
         for ((ID, track) in this.tracked) {
-            tracks.add(ID to MatrixUtils.createRealVector(track.project()))
+            tracks.add(Triple(ID, MatrixUtils.createRealVector(track.project()), track.getCategory()))
         }
         return tracks
     }
 
-    fun linearAssignment(D: Array<DoubleArray>, trackIDs: List<Int>, detections: List<RealVector>) {
-        val negativeD = Array(D.size) { row ->
-            DoubleArray(D[row].size) { col ->
-                -D[row][col]
-            }
-        }
-        val (rows, cols) = linearSumAssignment(negativeD)
+    fun linearAssignment(D: Array<DoubleArray>, trackIDs: List<Int>, detections: List<RealVector>, categories: List<Category>) {
+
+        val assignedRowsCols = greedyAssignment(D)
         val usedRows = HashSet<Int>()
         val usedCols = HashSet<Int>()
-        for ((row, col) in rows.zip(cols)) {
+        for (row_and_col in assignedRowsCols) {
+            val row = row_and_col.first
+            val col = row_and_col.second
             if (row in usedRows || col in usedCols) {
                 continue
             } else if (D[row][col] > this.matchingThreshold!!) {
@@ -85,7 +83,7 @@ open class Tracker {
             }
         } else {
             for (col in unusedCols) {
-                this.register(detections[col.first])
+                this.register(detections[col.first], categories[col.first])
             }
         }
     }
@@ -122,21 +120,21 @@ class KalmanTracker(private val metric: Metric = Metric("iou"), private val matc
      * Specialized tracker class which inherits from the basic Tracker class
      * Utilizes the KalmanFilter and the IoU metric for more robust bounding box associations
      */
-    fun update(detections: List<RealVector>): List<Pair<Int, RealVector>> {
+    fun update(detections: List<RealVector>, categories: List<Category>): List<Triple<Int, RealVector, Category>> {
         if (detections.isEmpty()) {
-            return this.handleNoDetections().map { it.key to MatrixUtils.createRealVector(it.value.project()) }
+            return this.handleNoDetections().map { Triple(it.key, MatrixUtils.createRealVector(it.value.project()), it.value.getCategory()) }
         }
         if (this.tracked.isEmpty()) {
             for (i in detections.indices) {
-                this.register(detections[i])
+                this.register(detections[i], categories[i])
             }
         } else {
-            this.associate(  detections.map { vector -> vector.toArray() }.toTypedArray())
+            this.associate(  detections.map { vector -> vector.toArray() }.toTypedArray(), categories)
         }
         return this.project()
     }
 
-    private fun associate(detections: Array<DoubleArray>) {
+    private fun associate(detections: Array<DoubleArray>, categories: List<Category>) {
         // Grab the set of object IDs and corresponding states
         val trackIds = tracked.keys.toList()
 
@@ -147,7 +145,7 @@ class KalmanTracker(private val metric: Metric = Metric("iou"), private val matc
         val distanceMatrix = metric.distanceMatrix(trackedStates.toList(), detections.toList())
 
         // Associate detections to existing trackers according to distance matrix
-        linearAssignment(distanceMatrix, trackIds, detections.map { row -> ArrayRealVector(row)})
+        linearAssignment(distanceMatrix, trackIds, detections.map { row -> ArrayRealVector(row)}, categories)
     }
 
 }

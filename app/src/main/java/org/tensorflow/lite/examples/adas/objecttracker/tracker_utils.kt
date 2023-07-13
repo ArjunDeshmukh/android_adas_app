@@ -32,54 +32,35 @@ fun bboxToCentroid(bbox: DoubleArray): Pair<Int, Int> {
     return cX to cY
 }
 
-fun linearSumAssignment(costMatrix: Array<DoubleArray>): Pair<IntArray, IntArray> {
+fun greedyAssignment(costMatrix: Array<DoubleArray>): MutableList<Pair<Int, Int>> {
     val numRows = costMatrix.size
     val numCols = costMatrix[0].size
 
-    val linearObjectiveFunction = LinearObjectiveFunction(DoubleArray(numRows * numCols) { i -> costMatrix[i / numCols][i % numCols] }, 0.0)
+    val assignedRowsCols: MutableList<Pair<Int, Int>> = mutableListOf()
+    val usedCols = BooleanArray(numCols)
 
-    val rowConstraints = mutableListOf<LinearConstraint>()
-    for (i in 0 until numRows) {
-        val coefficients = DoubleArray(numRows * numCols) { j -> if (j / numCols == i) 1.0 else 0.0 }
-        rowConstraints.add(LinearConstraint(coefficients, Relationship.EQ, 1.0))
-    }
+    for (row in 0 until numRows) {
+        var minCost = Double.POSITIVE_INFINITY
+        var minCol = -1
 
-    val colConstraints = mutableListOf<LinearConstraint>()
-    for (j in 0 until numCols) {
-        val coefficients = DoubleArray(numRows * numCols) { i -> if (i % numCols == j) 1.0 else 0.0 }
-        colConstraints.add(LinearConstraint(coefficients, Relationship.EQ, 1.0))
-    }
+        for (col in 0 until numCols) {
+            if (!usedCols[col] && costMatrix[row][col] < minCost) {
+                minCost = costMatrix[row][col]
+                minCol = col
+            }
+        }
 
-    val constraintSet = LinearConstraintSet(rowConstraints + colConstraints)
-    val simplexSolver = SimplexSolver()
-    val solution = simplexSolver.optimize(linearObjectiveFunction, constraintSet)
-
-    val assignments = IntArray(numRows)
-    for (i in 0 until numRows) {
-        val coefficients = solution.point
-        val start = i * numCols
-        val end = start + numCols
-        val assignedCol = coefficients.slice(start until end).maxByOrNull { coefficients[i] }
-        assignments[i] = (assignedCol!! % numCols).toInt()
-    }
-
-    val unassignedCols = IntArray(numCols) { it }
-    val assignedCols = assignments.toHashSet().toIntArray()
-    val unassignedRows = IntArray(numRows) { it }
-    val assignedRows = IntArray(numRows) { -1 }
-    for (i in 0 until numRows) {
-        val assignedCol = assignments[i]
-        if (assignedCol >= 0) {
-            unassignedRows[i] = -1
-            unassignedCols[assignedCol] = -1
-            assignedRows[i] = assignedCol
+        if (minCol != -1) {
+            usedCols[minCol] = true
+            assignedRowsCols.add(row to minCol)
         }
     }
 
-    val unassignedRowsIndices = unassignedRows.indices.filter { unassignedRows[it] >= 0 }.toIntArray()
-    val unassignedColsIndices = unassignedCols.indices.filter { unassignedCols[it] >= 0 }.toIntArray()
-
-    return assignedRows to assignedCols
+    return assignedRowsCols
 }
+
+
+
+
 
 
