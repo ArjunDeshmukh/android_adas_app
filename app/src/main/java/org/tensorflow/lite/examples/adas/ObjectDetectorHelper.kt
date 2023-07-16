@@ -190,9 +190,7 @@ class ObjectDetectorHelper(
             tensorImage.height,
             tensorImage.width)
 
-        Log.i("ObjectDetectorHelper", "$results")
-
-        //findAnObject(results, "person")
+        findAnObject(trackedResults, "person")
 
         /*
         * val orientationAngles = sensorlistenerobject.getOrientationAngles()

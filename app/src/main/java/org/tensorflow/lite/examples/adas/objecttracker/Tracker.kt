@@ -50,6 +50,7 @@ open class Tracker {
         for ((ID, track) in this.tracked) {
             tracks.add(Triple(ID, MatrixUtils.createRealVector(track.project()), track.getCategory()))
         }
+
         return tracks
     }
 
@@ -71,11 +72,12 @@ open class Tracker {
                 usedCols.add(col)
             }
         }
-        val unusedRows: Set<IntRange> = setOf(D.indices).subtract(usedRows) as Set<IntRange>
-        val unusedCols: Set<IntRange> = setOf(0 until D[0].size).subtract(usedCols) as Set<IntRange>
+        val unusedRows = D.indices.toHashSet().subtract(usedRows)
+        val unusedCols = D[0].indices.toHashSet().subtract(usedCols)
         if (D.size >= D[0].size) {
             for (row in unusedRows) {
-                val objectID = trackIDs[row.first]
+                val objectID = trackIDs[row]
+                this.tracked[objectID]?.incrementDisappearScans()
                 this.disappeared[objectID] = this.disappeared[objectID]!! + 1
                 if (this.disappeared[objectID]!! > this.maxDisappeared) {
                     this.deregister(objectID)
@@ -83,7 +85,21 @@ open class Tracker {
             }
         } else {
             for (col in unusedCols) {
-                this.register(detections[col.first], categories[col.first])
+                var isNonDuplicateDet: Boolean = true
+
+                for(row in usedRows)
+                {
+                    if(D[row][col] > this.matchingThreshold!!)
+                    {
+                        isNonDuplicateDet = false
+                        break
+                    }
+                }
+
+                if (isNonDuplicateDet)
+                {
+                    this.register(detections[col], categories[col])
+                }
             }
         }
     }

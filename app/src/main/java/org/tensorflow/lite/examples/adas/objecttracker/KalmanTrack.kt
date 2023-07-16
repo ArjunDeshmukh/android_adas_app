@@ -3,6 +3,8 @@ package org.tensorflow.lite.examples.adas.objecttracker
 import org.apache.commons.math3.linear.MatrixUtils
 import org.apache.commons.math3.linear.RealVector
 import org.tensorflow.lite.support.label.Category
+import kotlin.math.max
+import kotlin.math.min
 
 class KalmanTrack(initial_state: DoubleArray, category: Category) {
     private val kf: KalmanFilter = KalmanFilter(dim_x = 7, dim_z = 4)
@@ -46,6 +48,8 @@ class KalmanTrack(initial_state: DoubleArray, category: Category) {
 
     private val objCategory = category
 
+    private var disappearScans: Int = 0
+
     fun project(): DoubleArray {
         return xysrToXxyy( kf.x.toArray())
     }
@@ -65,6 +69,14 @@ class KalmanTrack(initial_state: DoubleArray, category: Category) {
 
     fun getCategory(): Category{
         return objCategory
+    }
+
+    fun incrementDisappearScans(){
+        disappearScans += 1
+    }
+
+    fun getDisappearScans(): Int {
+        return disappearScans
     }
 }
 
