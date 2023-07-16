@@ -5,9 +5,10 @@ import org.apache.commons.math3.optim.linear.LinearConstraintSet
 import org.apache.commons.math3.optim.linear.LinearConstraint
 import org.apache.commons.math3.optim.linear.Relationship
 import org.apache.commons.math3.optim.linear.SimplexSolver
+import kotlin.math.sqrt
 
 fun xysrToXxyy(b: DoubleArray, score: Double? = null): DoubleArray {
-    val w = Math.sqrt(b[2] * b[3])
+    val w = sqrt(b[2] * b[3])
     val h = b[2] / w
     return if (score == null) {
         doubleArrayOf(b[0] - w / 2.0, b[1] - h / 2.0, b[0] + w / 2.0, b[1] + h / 2.0)

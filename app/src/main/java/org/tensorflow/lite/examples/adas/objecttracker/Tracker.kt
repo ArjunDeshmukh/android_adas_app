@@ -17,11 +17,13 @@ open class Tracker {
     private val disappeared = LinkedHashMap<Int, Int>()
     private var maxDisappeared = 10
     private var metric: Metric?
+    private var objConfThreshold: Double = 0.70
 
-    constructor(metric: Metric?, matchingThreshold: Double?, maxDisappeared: Int) {
+    constructor(metric: Metric?, matchingThreshold: Double?, maxDisappeared: Int, objConfThreshold: Double) {
         this.metric = metric
         this.matchingThreshold = matchingThreshold
         this.maxDisappeared = maxDisappeared
+        this.objConfThreshold = objConfThreshold
     }
 
     fun register(state: RealVector?, category: Category) {
@@ -85,21 +87,11 @@ open class Tracker {
             }
         } else {
             for (col in unusedCols) {
-                var isNonDuplicateDet: Boolean = true
-
-                for(row in usedRows)
-                {
-                    if(D[row][col] > this.matchingThreshold!!)
-                    {
-                        isNonDuplicateDet = false
-                        break
-                    }
-                }
-
-                if (isNonDuplicateDet)
+                if (categories[col].score >= this.objConfThreshold)
                 {
                     this.register(detections[col], categories[col])
                 }
+
             }
         }
     }
@@ -131,7 +123,7 @@ open class Tracker {
     }
 }
 
-class KalmanTracker(private val metric: Metric = Metric("iou"), private val matchingThreshold: Double = 0.2) : Tracker(null, matchingThreshold, 10) {
+class KalmanTracker(private val metric: Metric = Metric("iou"), private val matchingThreshold: Double = 0.2) : Tracker(null, matchingThreshold, 10, 0.70) {
     /**
      * Specialized tracker class which inherits from the basic Tracker class
      * Utilizes the KalmanFilter and the IoU metric for more robust bounding box associations
@@ -162,6 +154,11 @@ class KalmanTracker(private val metric: Metric = Metric("iou"), private val matc
 
         // Associate detections to existing trackers according to distance matrix
         linearAssignment(distanceMatrix, trackIds, detections.map { row -> ArrayRealVector(row)}, categories)
+    }
+
+
+    fun calcFiltWidths(): List<Float> {
+        return tracked.values.map { track -> track.filtWidth() }
     }
 
 }

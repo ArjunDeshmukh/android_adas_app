@@ -2,9 +2,9 @@ package org.tensorflow.lite.examples.adas.objecttracker
 
 import org.apache.commons.math3.linear.MatrixUtils
 import org.apache.commons.math3.linear.RealVector
+import org.tensorflow.lite.examples.adas.SecondOrderFilter
 import org.tensorflow.lite.support.label.Category
-import kotlin.math.max
-import kotlin.math.min
+import kotlin.math.sqrt
 
 class KalmanTrack(initial_state: DoubleArray, category: Category) {
     private val kf: KalmanFilter = KalmanFilter(dim_x = 7, dim_z = 4)
@@ -50,6 +50,8 @@ class KalmanTrack(initial_state: DoubleArray, category: Category) {
 
     private var disappearScans: Int = 0
 
+    private val secondOrderFilter: SecondOrderFilter = SecondOrderFilter(25.0F, 5.0F)
+
     fun project(): DoubleArray {
         return xysrToXxyy( kf.x.toArray())
     }
@@ -78,6 +80,12 @@ class KalmanTrack(initial_state: DoubleArray, category: Category) {
     fun getDisappearScans(): Int {
         return disappearScans
     }
+
+    fun filtWidth(): Float {
+        return secondOrderFilter.process(sqrt((kf.x.toArray()[2] * kf.x.toArray()[3]).toFloat()))
+    }
+
+
 }
 
 

@@ -36,6 +36,7 @@ import org.tensorflow.lite.task.vision.detector.ObjectDetector
 import java.lang.Integer.min
 import org.apache.commons.math3.linear.RealVector
 import org.tensorflow.lite.support.label.Category
+import kotlin.math.sqrt
 
 
 class ObjectDetectorHelper(
@@ -56,7 +57,11 @@ class ObjectDetectorHelper(
     private var f_pic_taken: Boolean = false
 
     // Previous time step cell phone bounding box width
-    private var cell_phone_width_prev: Float? = null
+    private var obj_width_prev: Float? = null
+
+    private var count: Int = 0
+    private var mean: Float = 0.0F
+    private var m2: Float = 0.0F
 
     // Previous timestamp in milliseconds
     private var previousTimeStamp: Long? = null
@@ -180,7 +185,7 @@ class ObjectDetectorHelper(
         val tensorImage = imageProcessor.process(TensorImage.fromBitmap(image))
 
         val results = objectDetector?.detect(tensorImage)
-        val tracks = trackObjects(results)
+        val (tracks, filtWidths) = trackObjects(results)
         val trackedResults = trackerOPtoModelOP(tracks)
 
         inferenceTime = SystemClock.uptimeMillis() - inferenceTime
@@ -190,7 +195,7 @@ class ObjectDetectorHelper(
             tensorImage.height,
             tensorImage.width)
 
-        findAnObject(trackedResults, "person")
+        findAnObject(trackedResults, "person", filtWidths)
 
         /*
         * val orientationAngles = sensorlistenerobject.getOrientationAngles()
@@ -208,34 +213,45 @@ class ObjectDetectorHelper(
 
     }
 
-    private fun findAnObject(results:  MutableList<Detection>?, obj: String){
+    private fun findAnObject(results:  MutableList<Detection>?, obj: String, filtWidths: List<Float>){
         // Find if specified object is present. If yes, take a picture
-        var cell_phone_width_meas: Float
-        var cell_phone_width: Float
-        var width_filt_coeff: Float = 0.5F
-        var cell_phone_width_chng_ratio: Float = 0.0F
-        var f_cell_detected: Boolean = false
+        var obj_width: Float
+        var obj_width_chng_ratio: Float = 0.0F
+        var f_obj_detected: Boolean = false
         var timeGap: Long = 0L
         var timeToCollision: Float = 0.0F
 
         if (results != null) {
-            for (result in results){
+            for (i in 0 .. results.size){
+                var result = results[i]
                 for (category in result.categories){
                     if (category.label == obj){
-                        f_cell_detected = true
+                        f_obj_detected = true
                         if(!f_pic_taken) {
                             objectDetectorListener?.takePhoto()
                             f_pic_taken = true
                         }
 
-                        cell_phone_width = result.boundingBox.right - result.boundingBox.left
+                        obj_width = filtWidths[i]
 
-                        if(cell_phone_width_prev != null && cell_phone_width_prev != 0.0F){
-                            //cell_phone_width = cell_phone_width_prev?.plus(width_filt_coeff*(cell_phone_width_meas - cell_phone_width_prev!!))!!
-                            cell_phone_width_chng_ratio = cell_phone_width/ cell_phone_width_prev!!
+                        if(obj_width_prev != null && obj_width_prev != 0.0F){
+                            obj_width_chng_ratio = obj_width/ obj_width_prev!!
+                            count++
+                            val delta = obj_width - mean
+                            mean += delta / count
+                            val delta2 = obj_width - mean
+                            m2 += delta*delta2
+                        }
+                        else
+                        {
+                            count = 1
+                            mean = obj_width
+                            m2 = 0.0F
                         }
 
-                        if(cell_phone_width_chng_ratio > 1.0F)
+                        val standardDeviation: Float = if (count < 2) Float.NaN else sqrt(m2 / (count - 1).toFloat())
+
+                        if(obj_width_chng_ratio > 1.0F)
                         {
                             obj_width_inc_cnt += 1
                             obj_width_inc_cnt = min(obj_width_inc_cnt, 1000)
@@ -249,7 +265,7 @@ class ObjectDetectorHelper(
 
                         if(f_obj_width_inc_persistent)
                         {
-                            Log.i("ObjectDetectorHelper", "Cell Phone Width: $cell_phone_width , Count: $obj_width_inc_cnt")
+                            //Log.i("ObjectDetectorHelper", "Cell Phone Width: $obj_width , Count: $obj_width_inc_cnt")
                         }
 
                         val currentInstant: java.time.Instant = java.time.Instant.now()
@@ -259,49 +275,56 @@ class ObjectDetectorHelper(
                         }
 
                         timeToCollision = if(f_obj_width_inc_persistent){
-                            timeGap.toFloat()*MILLISEC_TO_SEC/(cell_phone_width_chng_ratio - 1.0F)
+                            timeGap.toFloat()*MILLISEC_TO_SEC/(obj_width_chng_ratio - 1.0F)
                         } else{
                             INFINITY
                         }
 
                         //Log.i("ObjectDetectorHelper",
-                        //    "Width ratio of object: $cell_phone_width_chng_ratio, Time To Collision of $obj is $timeToCollision, Time Gap between detections: " +
+                        //    "Width ratio of object: $obj_width_chng_ratio, Time To Collision of $obj is $timeToCollision, Time Gap between detections: " +
                         //            "$timeGap ms"
                         //)
+                        Log.i("ObjectDetectorHelper", "Obj Width: $obj_width , Mean: $mean, Std Dev: $standardDeviation" +
+                               "Time Gap: $timeGap")
+
 
 
                         if(timeToCollision < 2.0F)
                         {
                             toneGen1.startTone(ToneGenerator.TONE_CDMA_PIP,150);
-                            Log.i("ObjectDetectorHelper","Width ratio of object: $cell_phone_width_chng_ratio, Time To Collision of $obj is $timeToCollision, Time Gap between detections: " +
-                                        "$timeGap ms")
+                            //Log.i("ObjectDetectorHelper","Width ratio of object: $obj_width_chng_ratio, Time To Collision of $obj is $timeToCollision, Time Gap between detections: " +
+                            //           "$timeGap ms")
                         }
                         else
                         {
                         }
 
-                        cell_phone_width_prev = cell_phone_width
+                        obj_width_prev = obj_width
                         previousTimeStamp = currentTimeStamp
 
                     }
-                    if(f_cell_detected){break}
+                    if(f_obj_detected){break}
                 }
-                if(f_cell_detected){break}
+                if(f_obj_detected){break}
             }
         }
 
-        if(!f_cell_detected){
-            cell_phone_width_prev = 0.0F
+        if(!f_obj_detected){
+            obj_width_prev = 0.0F
             //Log.i("ObjectDetectorHelper", "Frame Missed")
 
         }
     }
 
-    private fun trackObjects(results: MutableList<Detection>?):  List<Triple<Int, RealVector, Category>>{
+    private fun trackObjects(results: MutableList<Detection>?):  Pair<List<Triple<Int, RealVector, Category>>, List<Float>>{
 
         val (detections, categories) = modelOPtoTrackerIP(results)
 
-        return tracker.update(detections, categories)
+        val tracks: List<Triple<Int, RealVector, Category>> = tracker.update(detections, categories)
+
+        val filtWidths: List<Float> = tracker.calcFiltWidths()
+
+        return Pair(tracks, filtWidths)
 
     }
 
