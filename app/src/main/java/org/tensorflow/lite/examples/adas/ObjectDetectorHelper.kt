@@ -131,7 +131,6 @@ class ObjectDetectorHelper(
                 MODEL_EFFICIENTDETV1 -> "efficientdet-lite1.tflite"
                 MODEL_EFFICIENTDETV2 -> "efficientdet-lite2.tflite"
                 MODEL_MOBILEOBJECTLOCALV1 -> "mobile_object_localizer_v1_1_metadata_2.tflite"
-                MODEL_MOBILENETV1_FP32 -> "mobilenet_v1_100_320_fp32_default_1.tflite"
                 else -> "mobilenetv1.tflite"
             }
 
@@ -222,7 +221,7 @@ class ObjectDetectorHelper(
         var timeToCollision: Float = 0.0F
 
         if (results != null) {
-            for (i in 0 .. results.size){
+            for (i in 0 until results.size){
                 var result = results[i]
                 for (category in result.categories){
                     if (category.label == obj){
@@ -382,7 +381,6 @@ class ObjectDetectorHelper(
         const val MODEL_EFFICIENTDETV1 = 2
         const val MODEL_EFFICIENTDETV2 = 3
         const val MODEL_MOBILEOBJECTLOCALV1 = 4
-        const val MODEL_MOBILENETV1_FP32 = 5
 
         const val MILLISEC_TO_SEC: Float = 1.0E-3F
         const val INFINITY: Float = 1000000F

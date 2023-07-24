@@ -18,7 +18,7 @@ class Metric(private val metric: String = "iou") {
         val dm = Array(tracks.size) { DoubleArray(detections.size) }
         for (i in tracks.indices) {
             for (j in detections.indices) {
-                dm[i][j] = iou(tracks[i], detections[j])
+                dm[i][j] = - iou(tracks[i], detections[j]) //Negative sign because larger the iou, lower the cost
             }
         }
         return dm

@@ -50,6 +50,5 @@
         <item>EfficientDet Lite1</item>
         <item>EfficientDet Lite2</item>
         <item>Mobile Object Localizer V1</item>
-        <item>MobileNet V1 FP32</item>
     </string-array>
 </resources>

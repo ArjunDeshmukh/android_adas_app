@@ -5,6 +5,7 @@ import org.apache.commons.math3.linear.MatrixUtils
 import java.util.LinkedHashMap
 import org.apache.commons.math3.linear.RealVector
 import org.tensorflow.lite.support.label.Category
+import kotlin.math.abs
 
 open class Tracker {
     /**
@@ -53,6 +54,16 @@ open class Tracker {
             tracks.add(Triple(ID, MatrixUtils.createRealVector(track.project()), track.getCategory()))
         }
 
+        val objectsList = ArrayList<ObjectClass>()
+        for ((ID, track) in this.tracked) {
+            var obj = ObjectClass()
+            obj.ID = ID
+            obj.top_left_bottom_right_coord = MatrixUtils.createRealVector(track.project())
+            obj.category = track.getCategory()
+            obj.filtWidth = track.filtWidth()
+            objectsList.add(obj)
+        }
+
         return tracks
     }
 
@@ -66,7 +77,7 @@ open class Tracker {
             val col = row_and_col.second
             if (row in usedRows || col in usedCols) {
                 continue
-            } else if (D[row][col] > this.matchingThreshold!!) {
+            } else if (abs(D[row][col])  > this.matchingThreshold!!) {
                 val trackID = trackIDs[row]
                 this.tracked[trackID] = this.tracked[trackID]!!.update(detections[col])
                 this.disappeared[trackID] = 0
