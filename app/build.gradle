@@ -125,4 +125,5 @@ dependencies {
     implementation 'org.tensorflow:tensorflow-lite-gpu:2.9.0'
 
     implementation 'org.apache.commons:commons-math3:3.6.1'
+
 }

@@ -127,9 +127,9 @@ class ObjectDetectorHelper(
         val modelName =
             when (currentModel) {
                 MODEL_MOBILENETV1 -> "mobilenetv1.tflite"
-                MODEL_EFFICIENTDETV0 -> "efficientdet-lite0.tflite"
-                MODEL_EFFICIENTDETV1 -> "efficientdet-lite1.tflite"
-                MODEL_EFFICIENTDETV2 -> "efficientdet-lite2.tflite"
+                MODEL_MOBILENETV2_UINT8 -> "mobilenet_v2_fpn_100_uint8.tflite"
+                MODEL_MOBILENETV2_INT8 -> "mobilenet_v2_100_int8.tflite"
+                MODEL_YOLOV5 -> "yolov5s_int8_320.tflite"
                 MODEL_MOBILEOBJECTLOCALV1 -> "mobile_object_localizer_v1_1_metadata_2.tflite"
                 else -> "mobilenetv1.tflite"
             }
@@ -377,9 +377,9 @@ class ObjectDetectorHelper(
         const val DELEGATE_GPU = 1
         const val DELEGATE_NNAPI = 2
         const val MODEL_MOBILENETV1 = 0
-        const val MODEL_EFFICIENTDETV0 = 1
-        const val MODEL_EFFICIENTDETV1 = 2
-        const val MODEL_EFFICIENTDETV2 = 3
+        const val MODEL_MOBILENETV2_UINT8 = 1
+        const val MODEL_MOBILENETV2_INT8 = 2
+        const val MODEL_YOLOV5 = 3
         const val MODEL_MOBILEOBJECTLOCALV1 = 4
 
         const val MILLISEC_TO_SEC: Float = 1.0E-3F

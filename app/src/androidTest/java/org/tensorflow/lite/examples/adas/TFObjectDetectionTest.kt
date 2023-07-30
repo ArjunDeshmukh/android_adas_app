@@ -54,7 +54,7 @@ class TFObjectDetectionTest {
             ObjectDetectorHelper(
                 context = InstrumentationRegistry.getInstrumentation().context,
                 objectDetectorListener =
-                    object : ObjectDetectorHelper.DetectorListener {
+                    object: ObjectDetectorHelper.DetectorListener {
                         override fun onError(error: String) {
                             // no op
                         }
@@ -90,6 +90,10 @@ class TFObjectDetectionTest {
                                 }
                             }
                         }
+
+                        override fun takePhoto() {
+                            TODO("Not yet implemented")
+                        }
                     }
             )
         // Create Bitmap and convert to TensorImage
@@ -121,6 +125,10 @@ class TFObjectDetectionTest {
                                 assertTrue(result.boundingBox.left <= imageWidth)
                                 assertTrue(result.boundingBox.right <= imageWidth)
                             }
+                        }
+
+                        override fun takePhoto() {
+                            TODO("Not yet implemented")
                         }
                     }
             )

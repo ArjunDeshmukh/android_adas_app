@@ -46,9 +46,9 @@
 
     <string-array name="models_spinner_titles">
         <item>MobileNet V1</item>
-        <item>EfficientDet Lite0</item>
-        <item>EfficientDet Lite1</item>
-        <item>EfficientDet Lite2</item>
+        <item>MobileNet V2 UINT8</item>
+        <item>MobileNet V2 INT8</item>
+        <item>YOLO V5</item>
         <item>Mobile Object Localizer V1</item>
     </string-array>
 </resources>
