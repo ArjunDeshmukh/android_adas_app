@@ -1,5 +1,6 @@
 package org.tensorflow.lite.examples.adas.objecttracker
 
+import android.util.Log
 import org.apache.commons.math3.linear.ArrayRealVector
 import org.apache.commons.math3.linear.MatrixUtils
 import java.util.LinkedHashMap
@@ -16,7 +17,9 @@ open class Tracker {
     private var matchingThreshold: Double? = null
     val tracked = LinkedHashMap<Int, KalmanTrack>()
     private val disappeared = LinkedHashMap<Int, Int>()
+    private val numContDetections = LinkedHashMap<Int, Int>()
     private var maxDisappeared = 10
+    private var matureContDetScans = 3
     private var metric: Metric?
     private var objConfThreshold: Double = 0.70
 
@@ -30,12 +33,14 @@ open class Tracker {
     fun register(state: RealVector?, category: Category) {
         this.tracked[this.nextTrackID] = KalmanTrack(state!!.toArray(), category)
         this.disappeared[this.nextTrackID] = 0
+        this.numContDetections[this.nextTrackID] = 1
         this.nextTrackID++
     }
 
     fun deregister(objectID: Int) {
         this.tracked.remove(objectID)
         this.disappeared.remove(objectID)
+        this.numContDetections.remove(objectID)
     }
 
     fun handleNoDetections(): LinkedHashMap<Int, KalmanTrack> {
@@ -51,7 +56,9 @@ open class Tracker {
     fun project(): List<Triple<Int, RealVector, Category>> {
         val tracks = ArrayList<Triple<Int, RealVector, Category>>()
         for ((ID, track) in this.tracked) {
-            tracks.add(Triple(ID, MatrixUtils.createRealVector(track.project()), track.getCategory()))
+            if(track.getObjectStatus() != TrackStatus.NEW){
+                tracks.add(Triple(ID, MatrixUtils.createRealVector(track.project()), track.getCategory()))
+            }
         }
 
         val objectsList = ArrayList<ObjectClass>()
@@ -81,6 +88,7 @@ open class Tracker {
                 val trackID = trackIDs[row]
                 this.tracked[trackID] = this.tracked[trackID]!!.update(detections[col])
                 this.disappeared[trackID] = 0
+                this.numContDetections[trackID] = this.numContDetections[trackID]!! + 1
                 usedRows.add(row)
                 usedCols.add(col)
             }
@@ -90,19 +98,15 @@ open class Tracker {
         if (D.size >= D[0].size) {
             for (row in unusedRows) {
                 val objectID = trackIDs[row]
-                this.tracked[objectID]?.incrementDisappearScans()
                 this.disappeared[objectID] = this.disappeared[objectID]!! + 1
+                this.numContDetections[objectID] = 0
                 if (this.disappeared[objectID]!! > this.maxDisappeared) {
                     this.deregister(objectID)
                 }
             }
         } else {
             for (col in unusedCols) {
-                if (categories[col].score >= this.objConfThreshold)
-                {
                     this.register(detections[col], categories[col])
-                }
-
             }
         }
     }
@@ -111,7 +115,32 @@ open class Tracker {
         this.nextTrackID = 0
         this.tracked.clear()
         this.disappeared.clear()
+        this.numContDetections.clear()
     }
+
+    fun statusUpdate() {
+        for(key in this.tracked.keys){
+            if(this.tracked[key]?.getObjectStatus()  == TrackStatus.NEW){
+
+                //Log.i("Tracker", "Track key: $track.key ")
+                if(this.numContDetections[key]!! >= this.matureContDetScans )
+                {
+                    this.tracked[key]?.setObjectStatus(TrackStatus.MATURE)
+                }
+            }
+            if(this.tracked[key]?.getObjectStatus()  == TrackStatus.MATURE){
+                if(this.disappeared[key]!! > 0){
+                    this.tracked[key]?.setObjectStatus(TrackStatus.COASTED)
+                }
+            }
+            if(this.tracked[key]?.getObjectStatus() == TrackStatus.COASTED){
+                if(this.disappeared[key]!! == 0) {
+                    this.tracked[key]?.setObjectStatus(TrackStatus.MATURE)
+                }
+            }
+        }
+    }
+
 
     companion object {
         fun cropBBoxFromFrame(frame: Array<Array<Double>>, bboxes: List<RealVector>): List<Array<Array<Double?>>> {
@@ -153,18 +182,23 @@ class KalmanTracker(private val metric: Metric = Metric("iou"), private val matc
         return this.project()
     }
 
-    private fun associate(detections: Array<DoubleArray>, categories: List<Category>) {
+    private fun associate(detections: Array<DoubleArray>, detectionCategories: List<Category>) {
         // Grab the set of object IDs and corresponding states
         val trackIds = tracked.keys.toList()
 
         // Get predicted tracked object states from KalmanFilter
         val trackedStates = tracked.values.map { track -> track.predict() }
 
+        val trackedStateCategories: List<Category> = tracked.values.map { track -> track.getCategory() }
+
         // Compute the distance matrix between detections and trackers according to metric
-        val distanceMatrix = metric.distanceMatrix(trackedStates.toList(), detections.toList())
+        val distanceMatrix = metric.distanceMatrix(trackedStates.toList(), detections.toList(), trackedStateCategories, detectionCategories)
 
         // Associate detections to existing trackers according to distance matrix
-        linearAssignment(distanceMatrix, trackIds, detections.map { row -> ArrayRealVector(row)}, categories)
+        linearAssignment(distanceMatrix, trackIds, detections.map { row -> ArrayRealVector(row)}, detectionCategories)
+
+        // Update status of each tracked object
+        statusUpdate()
     }
 
 

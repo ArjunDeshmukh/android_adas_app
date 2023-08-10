@@ -47,9 +47,7 @@ class KalmanTrack(initial_state: DoubleArray, category: Category) {
     }
 
     private val objCategory = category
-
-    private var disappearScans: Int = 0
-
+    private var objStatus = TrackStatus.NEW
     private val secondOrderFilter: SecondOrderFilter = SecondOrderFilter(25.0F, 5.0F)
 
     fun project(): DoubleArray {
@@ -73,19 +71,26 @@ class KalmanTrack(initial_state: DoubleArray, category: Category) {
         return objCategory
     }
 
-    fun incrementDisappearScans(){
-        disappearScans += 1
-    }
-
-    fun getDisappearScans(): Int {
-        return disappearScans
-    }
 
     fun filtWidth(): Float {
         return secondOrderFilter.process(sqrt((kf.x.toArray()[2] * kf.x.toArray()[3]).toFloat()))
     }
 
+    fun setObjectStatus(objStat: TrackStatus){
+        this.objStatus  = objStat
+    }
 
+    fun getObjectStatus(): TrackStatus{
+        return this.objStatus
+    }
+
+
+}
+
+enum class TrackStatus {
+    NEW,
+    MATURE,
+    COASTED
 }
 
 

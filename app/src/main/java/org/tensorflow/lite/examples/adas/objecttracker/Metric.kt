@@ -1,34 +1,46 @@
 package org.tensorflow.lite.examples.adas.objecttracker
+
+import org.tensorflow.lite.support.label.Category
+
 class Metric(private val metric: String = "iou") {
-    fun distanceMatrix(tracks: List<DoubleArray>, detections: List<DoubleArray>): Array<DoubleArray> {
+    fun distanceMatrix(tracks: List<DoubleArray>, detections: List<DoubleArray>, trackedStateCategories: List<Category>, detectionCategories: List<Category>): Array<DoubleArray> {
         return when (metric) {
             "iou" -> {
                 val tracksArr = tracks.map { it.sliceArray(0 until 4) }.toTypedArray()
                 val detectionsArr = detections.map { it.sliceArray(0 until 4) }.toTypedArray()
-                iouDistanceMatrix(tracksArr, detectionsArr)
+                iouDistanceMatrix(tracksArr, detectionsArr, trackedStateCategories, detectionCategories)
             }
             "euc" -> {
-                eucDistanceMatrix(tracks, detections)
+                eucDistanceMatrix(tracks, detections, trackedStateCategories, detectionCategories)
             }
             else -> throw IllegalArgumentException("Invalid metric")
         }
     }
 
-    private fun iouDistanceMatrix(tracks: Array<DoubleArray>, detections: Array<DoubleArray>): Array<DoubleArray> {
+    private fun iouDistanceMatrix(tracks: Array<DoubleArray>, detections: Array<DoubleArray>, trackedStateCategories: List<Category>, detectionCategories: List<Category>): Array<DoubleArray> {
         val dm = Array(tracks.size) { DoubleArray(detections.size) }
         for (i in tracks.indices) {
             for (j in detections.indices) {
                 dm[i][j] = - iou(tracks[i], detections[j]) //Negative sign because larger the iou, lower the cost
+                if (trackedStateCategories[i].label != detectionCategories[j].label) //If labels don't match then set cost an infinite
+                {
+                    dm[i][j] = Double.MAX_VALUE
+                }
+
             }
         }
         return dm
     }
 
-    private fun eucDistanceMatrix(tracks: List<DoubleArray>, detections: List<DoubleArray>): Array<DoubleArray> {
+    private fun eucDistanceMatrix(tracks: List<DoubleArray>, detections: List<DoubleArray>, trackedStateCategories: List<Category>, detectionCategories: List<Category>): Array<DoubleArray> {
         val dm = Array(tracks.size) { DoubleArray(detections.size) }
         for (i in tracks.indices) {
             for (j in detections.indices) {
                 dm[i][j] = euc(tracks[i], detections[j])
+                if (trackedStateCategories[i].label != detectionCategories[j].label) //If labels don't match then set cost an infinite
+                {
+                    dm[i][j] = Double.MAX_VALUE
+                }
             }
         }
         return dm
