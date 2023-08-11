@@ -100,12 +100,13 @@ open class Tracker {
                 val objectID = trackIDs[row]
                 this.disappeared[objectID] = this.disappeared[objectID]!! + 1
                 this.numContDetections[objectID] = 0
-                if (this.disappeared[objectID]!! > this.maxDisappeared) {
+                if ((this.disappeared[objectID]!! > this.maxDisappeared) || this.tracked[objectID]?.getObjectStatus() == TrackStatus.NEW) {
                     this.deregister(objectID)
                 }
             }
         } else {
             for (col in unusedCols) {
+                if(categories[col].score > this.objConfThreshold)
                     this.register(detections[col], categories[col])
             }
         }
