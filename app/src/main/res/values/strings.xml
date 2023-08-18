@@ -46,7 +46,6 @@
 
     <string-array name="models_spinner_titles">
         <item>MobileNet V1</item>
-        <item>MobileNet V2 640x640</item>
         <item>Mobile Object Localizer V1</item>
     </string-array>
 </resources>
