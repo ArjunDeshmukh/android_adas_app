@@ -33,7 +33,6 @@ import androidx.camera.core.AspectRatio
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
-import androidx.camera.core.ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888
 import androidx.camera.core.ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageProxy
@@ -47,7 +46,7 @@ import androidx.camera.video.Recording
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.navigation.Navigation
-import org.tensorflow.lite.examples.adas.TFLiteClassifier
+import org.tensorflow.lite.examples.adas.classifier.TFLiteClassifier
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import org.tensorflow.lite.examples.adas.R
@@ -112,12 +111,12 @@ class CameraFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         tfLiteClassifier = TFLiteClassifier(context = requireContext())
-
-        tfLiteClassifier
+        tfLiteClassifier.initializeInterpreter()
+        /*
+        * tfLiteClassifier
             .initialize()
             .addOnSuccessListener { }
-            .addOnFailureListener { e -> Log.e(TAG, "Error in setting up the classifier.", e) }
-
+            .addOnFailureListener { e -> Log.e(TAG, "Error in setting up the classifier.", e) }*/
 
         // Initialize our background executor
         cameraExecutor = Executors.newSingleThreadExecutor()
@@ -242,10 +241,15 @@ class CameraFragment : Fragment() {
 
         val imageRotation = image.imageInfo.rotationDegrees
 
-        tfLiteClassifier
-            .classifyAsync(bitmapBuffer)
+        val resultText = tfLiteClassifier.classify(bitmapBuffer, imageRotation)
+        /*
+        * tfLiteClassifier
+            .classifyAsync(bitmapBuffer, imageRotation)
             .addOnSuccessListener { resultText -> fragmentCameraBinding.predictedTextView?.text = resultText }
             .addOnFailureListener { }
+            * */
+        fragmentCameraBinding.predictedTextView.text = resultText
+
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {

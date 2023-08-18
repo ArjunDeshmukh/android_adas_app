@@ -1,8 +1,10 @@
-package org.tensorflow.lite.examples.adas
+package org.tensorflow.lite.examples.adas.classifier
 
 import android.content.Context
 import android.content.res.AssetManager
 import android.graphics.Bitmap
+import android.graphics.Matrix
+import android.graphics.RectF
 import android.os.SystemClock
 import android.util.Log
 import com.google.android.gms.tasks.Task
@@ -14,7 +16,6 @@ import java.io.FileInputStream
 import java.io.IOException
 import java.io.InputStreamReader
 import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.nio.channels.FileChannel
 import java.util.*
 import java.util.concurrent.Callable
@@ -44,16 +45,15 @@ class TFLiteClassifier(private val context: Context) {
 
     fun initialize(): Task<Void> {
         return call(
-            executorService,
-            Callable<Void> {
-                initializeInterpreter()
-                null
-            }
-        )
+            executorService
+        ) {
+            initializeInterpreter()
+            null
+        }
     }
 
     @Throws(IOException::class)
-    private fun initializeInterpreter() {
+    fun initializeInterpreter() {
 
         val assetManager = context.assets
         val model = loadModelFile(assetManager, "yolov5s-int8.tflite")
@@ -115,29 +115,102 @@ class TFLiteClassifier(private val context: Context) {
         return index
     }
 
-
-    private fun classify(bitmap: Bitmap): String {
+    fun classify(bitmap: Bitmap, imageRotation: Int): String {
 
         check(isInitialized) { "TF Lite Interpreter is not initialized yet." }
         val resizedImage =
             Bitmap.createScaledBitmap(bitmap, inputImageWidth, inputImageHeight, true)
+        var matrix: Matrix = Matrix()
+        matrix.postRotate(imageRotation.toFloat())
+        val rotatedBitmap = Bitmap.createBitmap(resizedImage, 0, 0,
+            resizedImage.width, resizedImage.height, matrix, true)
 
         val byteBuffer = convertBitmapToByteBuffer(resizedImage)
+        val outBuffer: ByteBuffer = ByteBuffer.allocateDirect(1*6300*85)
+        var outputMap: MutableMap<Int, Any> = HashMap<Int, Any>()
+        outputMap[0] = outBuffer
 
-        val output = Array(1) { FloatArray(labels.size) }
         val startTime = SystemClock.uptimeMillis()
-        interpreter?.run(byteBuffer, output)
+        interpreter?.runForMultipleInputsOutputs(arrayOf(byteBuffer), outputMap)
         val endTime = SystemClock.uptimeMillis()
-
         var inferenceTime = endTime - startTime
-        var index = getMaxResult(output[0])
+
+
+        val outData: ByteBuffer = outputMap[0] as ByteBuffer
+        val outputArray = getOutArrayFromOutBuffer(outData)
+        val detections = getBoundingBoxesClasses(outputArray)
+
+
+        //var index = getMaxResult(output[0])
+        var index: Int = 0
         var result = "Prediction is ${labels[index]}\nInference Time $inferenceTime ms"
 
         return result
     }
 
-    fun classifyAsync(bitmap: Bitmap): Task<String> {
-        return call(executorService, Callable<String> { classify(bitmap) })
+    private fun getBoundingBoxesClasses(outputArray: Array<Array<FloatArray>>): ArrayList<Detection> {
+
+        val detections: ArrayList<Detection> = ArrayList<Detection>()
+
+        for (i in 0 until OUTPUT_BOXES) {
+            val confidence: Float = outputArray[0][i][4]
+            var detectedClass = -1
+            var maxClass = 0f
+            val classes = FloatArray(labels.size)
+            for (c in labels.indices) {
+                classes[c] = outputArray[0][i][5 + c]
+            }
+            for (c in labels.indices) {
+                if (classes[c] > maxClass) {
+                    detectedClass = c
+                    maxClass = classes[c]
+                }
+            }
+            val confidenceInClass = maxClass * confidence
+            if (confidenceInClass > OBJ_MINI_CONFIDENCE) {
+                val xPos: Float = outputArray[0][i][0]
+                val yPos: Float = outputArray[0][i][1]
+                val w: Float = outputArray[0][i][2]
+                val h: Float = outputArray[0][i][3]
+
+                val rect = RectF(
+                    0f.coerceAtLeast(xPos - w / 2),
+                    0f.coerceAtLeast(yPos - h / 2),
+                    (inputImageWidth - 1).toFloat().coerceAtMost(xPos + w / 2),
+                    (inputImageHeight - 1).toFloat().coerceAtMost(yPos + h / 2)
+                )
+                detections.add(Detection(rect, Category(labels[detectedClass], confidenceInClass)))
+            }
+        }
+
+        return detections
+    }
+
+    private fun getOutArrayFromOutBuffer(outData: ByteBuffer):  Array<Array<FloatArray>>{
+        val out = Array<Array<FloatArray>>(1) {
+            Array<FloatArray>(OUTPUT_BOXES) {
+                FloatArray(labels.size + 5)
+            }
+        }
+
+        var index: Int = 0
+
+        for (i in 0 until OUTPUT_BOXES) {
+            for (j in 0 until labels.size + 5) {
+                out[0][i][j] =
+                    oup_scale * ((outData.get(index++).toInt() and 0xFF) - oup_zero_point)
+            }
+            // Denormalize xywh
+            for (j in 0..3) {
+                out[0][i][j] *= modelInputSize.toFloat()
+            }
+        }
+
+        return out
+    }
+
+    fun classifyAsync(bitmap: Bitmap, imageRotation: Int): Task<String> {
+        return call(executorService) { classify(bitmap, imageRotation) }
     }
 
     fun close() {
@@ -158,7 +231,8 @@ class TFLiteClassifier(private val context: Context) {
 
     private fun convertBitmapToByteBuffer(bitmap: Bitmap): ByteBuffer {
         val byteBuffer = ByteBuffer.allocateDirect(modelInputSize)
-        byteBuffer.order(ByteOrder.nativeOrder())
+        //byteBuffer.order(ByteOrder.nativeOrder())
+        byteBuffer.rewind()
 
         val pixels = IntArray(inputImageWidth * inputImageHeight)
         bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
@@ -183,5 +257,7 @@ class TFLiteClassifier(private val context: Context) {
         private const val CHANNEL_SIZE = 3
         private const val IMAGE_MEAN = 127.5f
         private const val IMAGE_STD = 127.5f
+        private const val OUTPUT_BOXES = 6300
+        private const val OBJ_MINI_CONFIDENCE = 0.3F
     }
 }
