@@ -22,7 +22,7 @@ import java.util.concurrent.Callable
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
-class TFLiteClassifier(private val context: Context) {
+open class TFLiteClassifier(private val context: Context) {
 
     private var interpreter: Interpreter? = null
     var isInitialized = false
@@ -43,6 +43,8 @@ class TFLiteClassifier(private val context: Context) {
     private var oup_scale: Float = 0.0F
     private var oup_zero_point: Int = 0
 
+    var trial_index:Int = 1
+
     fun initialize(): Task<Void> {
         return call(
             executorService
@@ -60,6 +62,7 @@ class TFLiteClassifier(private val context: Context) {
 
         labels = loadLines(context, "coco.txt")
         val options = Interpreter.Options()
+        options.numThreads = 2
         //gpuDelegate = GpuDelegate()
         //options.addDelegate(gpuDelegate)
         val interpreter = Interpreter(model, options)
@@ -103,16 +106,16 @@ class TFLiteClassifier(private val context: Context) {
         return labels
     }
 
-    private fun getMaxResult(result: FloatArray): Int {
-        var probability = result[0]
-        var index = 0
+    private fun getMaxResult(result: List<Detection>): Int {
+        var probability = result[0].getScore()
+        var labelIndex = 0
         for (i in result.indices) {
-            if (probability < result[i]) {
-                probability = result[i]
-                index = i
+            if (probability < result[i].getScore()) {
+                probability = result[i].getScore()
+                labelIndex = result[i].getLabelIndex()
             }
         }
-        return index
+        return labelIndex
     }
 
     fun classify(bitmap: Bitmap, imageRotation: Int): String {
@@ -122,11 +125,13 @@ class TFLiteClassifier(private val context: Context) {
             Bitmap.createScaledBitmap(bitmap, inputImageWidth, inputImageHeight, true)
         var matrix: Matrix = Matrix()
         matrix.postRotate(imageRotation.toFloat())
-        val rotatedBitmap = Bitmap.createBitmap(resizedImage, 0, 0,
-            resizedImage.width, resizedImage.height, matrix, true)
+        val rotatedBitmap = Bitmap.createBitmap(
+            resizedImage, 0, 0,
+            resizedImage.width, resizedImage.height, matrix, true
+        )
 
         val byteBuffer = convertBitmapToByteBuffer(resizedImage)
-        val outBuffer: ByteBuffer = ByteBuffer.allocateDirect(1*6300*85)
+        val outBuffer: ByteBuffer = ByteBuffer.allocateDirect(1 * 6300 * 85)
         var outputMap: MutableMap<Int, Any> = HashMap<Int, Any>()
         outputMap[0] = outBuffer
 
@@ -139,13 +144,47 @@ class TFLiteClassifier(private val context: Context) {
         val outData: ByteBuffer = outputMap[0] as ByteBuffer
         val outputArray = getOutArrayFromOutBuffer(outData)
         val detections = getBoundingBoxesClasses(outputArray)
+        //val nms_detections = nms(detections)
 
 
-        //var index = getMaxResult(output[0])
-        var index: Int = 0
-        var result = "Prediction is ${labels[index]}\nInference Time $inferenceTime ms"
+        var index = getMaxResult(detections)
 
-        return result
+        return "Prediction is ${labels[index]}\nInference Time $inferenceTime ms"
+    }
+
+    private fun nms(list: ArrayList<Detection>): ArrayList<Detection>? {
+        val nmsList: ArrayList<Detection> = ArrayList<Detection>()
+        for (k in labels.indices) {
+            //1.find max confidence per class
+            val pq: PriorityQueue<Detection> = PriorityQueue<Detection>(
+                50
+            ) { lhs, rhs -> // Intentionally reversed to put high confidence at the head of the queue.
+                rhs.getScore().compareTo(lhs.getScore())
+            }
+            for (i in list.indices) {
+                if (list[i].getLabelIndex() === k) {
+                    pq.add(list[i])
+                }
+            }
+
+            //2.do non maximum suppression
+            while (pq.size > 0) {
+                //insert detection with max confidence
+                val a: Array<Detection?> = arrayOfNulls<Detection>(pq.size)
+                val detections: Array<Detection> = pq.toArray(a)
+                val max: Detection = detections[0]
+                nmsList.add(max)
+                pq.clear()
+                for (j in 1 until detections.size) {
+                    val detection: Detection = detections[j]
+                    val b: RectF = detection.getBoundingBox()
+                    if (box_iou(max.getBoundingBox(), b) < NMS_THRESHOLD) {
+                        pq.add(detection)
+                    }
+                }
+            }
+        }
+        return nmsList
     }
 
     private fun getBoundingBoxesClasses(outputArray: Array<Array<FloatArray>>): ArrayList<Detection> {
@@ -166,7 +205,8 @@ class TFLiteClassifier(private val context: Context) {
                     maxClass = classes[c]
                 }
             }
-            val confidenceInClass = maxClass * confidence
+            //val confidenceInClass = maxClass * confidence
+            val confidenceInClass = maxClass
             if (confidenceInClass > OBJ_MINI_CONFIDENCE) {
                 val xPos: Float = outputArray[0][i][0]
                 val yPos: Float = outputArray[0][i][1]
@@ -179,7 +219,7 @@ class TFLiteClassifier(private val context: Context) {
                     (inputImageWidth - 1).toFloat().coerceAtMost(xPos + w / 2),
                     (inputImageHeight - 1).toFloat().coerceAtMost(yPos + h / 2)
                 )
-                detections.add(Detection(rect, Category(labels[detectedClass], confidenceInClass)))
+                detections.add(Detection(rect, Category(context, labels[detectedClass], confidenceInClass)))
             }
         }
 
@@ -251,6 +291,37 @@ class TFLiteClassifier(private val context: Context) {
         return byteBuffer
     }
 
+    protected open fun box_iou(a: RectF, b: RectF): Float {
+        return box_intersection(a, b) / box_union(a, b)
+    }
+
+    protected open fun box_intersection(a: RectF, b: RectF): Float {
+        val w: Float = overlap(
+            (a.left + a.right) / 2, a.right - a.left,
+            (b.left + b.right) / 2, b.right - b.left
+        )
+        val h: Float = overlap(
+            (a.top + a.bottom) / 2, a.bottom - a.top,
+            (b.top + b.bottom) / 2, b.bottom - b.top
+        )
+        return if (w < 0 || h < 0) 0.0F else w * h
+    }
+
+    protected open fun box_union(a: RectF, b: RectF): Float {
+        val i = box_intersection(a, b)
+        return (a.right - a.left) * (a.bottom - a.top) + (b.right - b.left) * (b.bottom - b.top) - i
+    }
+
+    protected open fun overlap(x1: Float, w1: Float, x2: Float, w2: Float): Float {
+        val l1 = x1 - w1 / 2
+        val l2 = x2 - w2 / 2
+        val left = if (l1 > l2) l1 else l2
+        val r1 = x1 + w1 / 2
+        val r2 = x2 + w2 / 2
+        val right = if (r1 < r2) r1 else r2
+        return right - left
+    }
+
     companion object {
         private const val TAG = "TfliteClassifier"
         private const val FLOAT_TYPE_SIZE = 4
@@ -258,6 +329,7 @@ class TFLiteClassifier(private val context: Context) {
         private const val IMAGE_MEAN = 127.5f
         private const val IMAGE_STD = 127.5f
         private const val OUTPUT_BOXES = 6300
-        private const val OBJ_MINI_CONFIDENCE = 0.3F
+        private const val OBJ_MINI_CONFIDENCE = 0.2F
+        private const val NMS_THRESHOLD = 0.6F
     }
 }

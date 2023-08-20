@@ -4,8 +4,8 @@ import android.graphics.RectF
 
 class Detection {
 
-    private lateinit var boundingBox: RectF
-    private lateinit var category : Category
+    private var boundingBox: RectF
+    private var category : Category
 
     constructor(boundingBox: RectF, category: Category){
         this.boundingBox = boundingBox
@@ -18,5 +18,17 @@ class Detection {
 
     fun getCategory(): Category{
         return category
+    }
+
+    fun getScore(): Float{
+        return category.getScore()
+    }
+
+    fun getLabel(): String{
+        return category.getLabel()
+    }
+
+    fun getLabelIndex(): Int{
+        return category.getLabelIndex()
     }
 }
