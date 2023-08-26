@@ -18,10 +18,10 @@ open class Tracker {
     val tracked = LinkedHashMap<Int, KalmanTrack>()
     private val disappeared = LinkedHashMap<Int, Int>()
     private val numContDetections = LinkedHashMap<Int, Int>()
-    private var maxDisappeared = 10
+    private var maxDisappeared = 3
     private var matureContDetScans = 3
     private var metric: Metric?
-    private var objConfThreshold: Double = 0.70
+    private var objConfThreshold: Double = 0.50
 
     constructor(metric: Metric?, matchingThreshold: Double?, maxDisappeared: Int, objConfThreshold: Double) {
         this.metric = metric
@@ -106,6 +106,7 @@ open class Tracker {
             }
         } else {
             for (col in unusedCols) {
+                if (categories[col].score >= this.objConfThreshold)
                     this.register(detections[col], categories[col])
             }
         }
