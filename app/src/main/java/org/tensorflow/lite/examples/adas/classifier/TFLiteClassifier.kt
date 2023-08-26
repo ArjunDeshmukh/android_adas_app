@@ -12,13 +12,10 @@ import com.google.android.gms.tasks.Tasks.call
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.Tensor
 import org.tensorflow.lite.gpu.GpuDelegate
-import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
-import java.io.InputStream
 import java.io.InputStreamReader
 import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.nio.channels.FileChannel
 import java.util.*
 import java.util.concurrent.Callable
@@ -61,23 +58,12 @@ open class TFLiteClassifier(private val context: Context) {
     fun initializeInterpreter() {
 
         val assetManager = context.assets
-        val model = loadModelFile(assetManager, "yolov5s-int8-nms.tflite")
+        val model = loadModelFile(assetManager, "yolov5s-int8.tflite")
 
         labels = loadLines(context, "coco.txt")
         val options = Interpreter.Options()
-        //options.numThreads = 4
-        //gpuDelegate = GpuDelegate()
-        //options.addDelegate(gpuDelegate)
-        val modelFilename = "yolov5s-int8.tflite"
-        val modelInputStream: InputStream = assetManager.open(modelFilename)
-        val modelBytes = modelInputStream.readBytes()
 
-        // Create a direct ByteBuffer from model bytes
-        val modelByteBuffer = ByteBuffer.allocateDirect(modelBytes.size)
-        modelByteBuffer.order(ByteOrder.nativeOrder()) // Set the byte order as native
-        modelByteBuffer.put(modelBytes)
-        modelByteBuffer.rewind() // Reset position to 0
-        val interpreter = Interpreter(modelByteBuffer)
+        val interpreter = Interpreter(model)
 
         val inputShape = interpreter.getInputTensor(0).shape()
         inputImageWidth = inputShape[1]
@@ -121,29 +107,27 @@ open class TFLiteClassifier(private val context: Context) {
         return labels
     }
 
-    fun classify(bitmap: Bitmap, imageRotation: Int): String {
+    private fun classify(bitmap: Bitmap, imageRotation: Int): String {
 
         check(isInitialized) { "TF Lite Interpreter is not initialized yet." }
         val byteBufferArray = createModelInput(bitmap, imageRotation)
 
         val outputMap = createModelOutputYOLODefault()
-        //createModelOutputYOLONMS()
 
         var startTime = SystemClock.uptimeMillis()
         interpreter?.runForMultipleInputsOutputs(byteBufferArray, outputMap)
         var endTime = SystemClock.uptimeMillis()
-        var inferenceTime = endTime - startTime
+        val inferenceTime = endTime - startTime
 
         startTime = SystemClock.uptimeMillis()
         val outData: ByteBuffer = outputMap[0] as ByteBuffer
         val outputArray = getOutArrayFromOutBuffer(outData)
-        val detections = getBoundingBoxesClasses(outputArray)
-        endTime = SystemClock.uptimeMillis()
-        var inferenceTime2 = endTime - startTime
+        //val detections = getBoundingBoxesClasses(outputArray)
         //val nms_detections = nms(detections)
-
-
-        var index = getMaxResult(detections)
+        //var index = getMaxResultFrmDetections(detections)
+        val index = getMaxResultFrmArray(outputArray)
+        endTime = SystemClock.uptimeMillis()
+        val inferenceTime2 = endTime - startTime
 
         return "Prediction is ${labels[index]}\nInference Time $inferenceTime ms, Other processes take $inferenceTime2 ms"
     }
@@ -179,13 +163,13 @@ open class TFLiteClassifier(private val context: Context) {
             resizedImage, 0, 0,
             resizedImage.width, resizedImage.height, matrix, true
         )
-        val byteBuffer = convertBitmapToByteBuffer(resizedImage)
+        val byteBuffer = convertBitmapToByteBuffer(rotatedBitmap)
 
         return arrayOf(byteBuffer)
 
     }
 
-    private fun getMaxResult(result: List<Detection>): Int {
+    private fun getMaxResultFrmDetections(result: List<Detection>): Int {
         var probability = result[0].getScore()
         var labelIndex = 0
         for (i in result.indices) {
@@ -196,6 +180,36 @@ open class TFLiteClassifier(private val context: Context) {
         }
         return labelIndex
     }
+
+
+    private fun getMaxResultFrmArray(result: Array<Array<FloatArray>>): Int {
+        var classes: FloatArray
+        var maxClassProb: Float
+        var detectedClass: Int
+        var maxProbability: Float = 0F
+        var labelIndex: Int = 0
+        var confidence: Float
+        var confidenceInClass: Float
+
+        for (i in 0 until result[0].size) {
+            classes = result[0][i].sliceArray(5 until result[0][i].size)
+            maxClassProb = classes.maxOrNull()!!
+            detectedClass = if (maxClassProb != null) classes.indexOfFirst { it == maxClassProb } else -1
+            confidence = result[0][i][4]
+            confidenceInClass = maxClassProb*confidence
+            if(maxClassProb <= 1.0F && confidence<= 1.0F && result[0][i][2] > 0.1F && result[0][i][3] > 0.1F)
+            {
+                if(confidenceInClass > maxProbability)
+                {
+                    labelIndex = detectedClass
+                    maxProbability = confidenceInClass
+                }
+            }
+
+        }
+        return labelIndex
+    }
+
 
     private fun nms(list: ArrayList<Detection>): ArrayList<Detection>? {
         val nmsList: ArrayList<Detection> = ArrayList<Detection>()
@@ -238,10 +252,12 @@ open class TFLiteClassifier(private val context: Context) {
 
         for (i in 0 until num_output_boxes) {
             val confidence: Float = outputArray[0][i][4]
-            var detectedClass = -1
-            var maxClass = 0f
-            val classes = FloatArray(labels.size)
-            for (c in labels.indices) {
+            val classes = outputArray[0][i].sliceArray(5 until outputArray[0][i].size)
+            var maxClass = classes.maxOrNull()
+            var detectedClass = if (maxClass != null) classes.indexOfFirst { it == maxClass } else -1
+
+            /*
+            * for (c in labels.indices) {
                 classes[c] = outputArray[0][i][5 + c]
             }
             for (c in labels.indices) {
@@ -249,22 +265,25 @@ open class TFLiteClassifier(private val context: Context) {
                     detectedClass = c
                     maxClass = classes[c]
                 }
-            }
-            //val confidenceInClass = maxClass * confidence
-            val confidenceInClass = maxClass
-            if (confidenceInClass > OBJ_MINI_CONFIDENCE) {
-                val xPos: Float = outputArray[0][i][0]
-                val yPos: Float = outputArray[0][i][1]
-                val w: Float = outputArray[0][i][2]
-                val h: Float = outputArray[0][i][3]
+            }*/
 
-                val rect = RectF(
-                    0f.coerceAtLeast(xPos - w / 2),
-                    0f.coerceAtLeast(yPos - h / 2),
-                    (inputImageWidth - 1).toFloat().coerceAtMost(xPos + w / 2),
-                    (inputImageHeight - 1).toFloat().coerceAtMost(yPos + h / 2)
-                )
-                detections.add(Detection(rect, Category(context, labels[detectedClass], confidenceInClass)))
+            val confidenceInClass = maxClass?.times(confidence)
+            //val confidenceInClass = maxClass
+            if (confidenceInClass != null) {
+                if (confidenceInClass > OBJ_MINI_CONFIDENCE) {
+                    val xPos: Float = outputArray[0][i][0]
+                    val yPos: Float = outputArray[0][i][1]
+                    val w: Float = outputArray[0][i][2]
+                    val h: Float = outputArray[0][i][3]
+
+                    val rect = RectF(
+                        0f.coerceAtLeast(xPos - w / 2),
+                        0f.coerceAtLeast(yPos - h / 2),
+                        (inputImageWidth - 1).toFloat().coerceAtMost(xPos + w / 2),
+                        (inputImageHeight - 1).toFloat().coerceAtMost(yPos + h / 2)
+                    )
+                    detections.add(Detection(rect, Category(context, labels[detectedClass], confidenceInClass)))
+                }
             }
         }
 
