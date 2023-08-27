@@ -32,6 +32,11 @@ android:layout_height="match_parent">
     app:layout_constraintStart_toStartOf="parent"
     app:layout_constraintTop_toTopOf="parent" />
 
+<org.tensorflow.lite.examples.adas.OverlayView
+    android:id="@+id/overlay"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent" />
+
 
 <RelativeLayout
     android:id="@+id/rlBottom"

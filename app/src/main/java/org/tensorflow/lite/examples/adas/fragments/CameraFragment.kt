@@ -242,7 +242,7 @@ class CameraFragment : Fragment() {
 
         val imageRotation = image.imageInfo.rotationDegrees
 
-
+        /*
         val startTime = SystemClock.uptimeMillis()
         tfLiteClassifier
             .classifyAsync(bitmapBuffer, imageRotation)
@@ -256,19 +256,21 @@ class CameraFragment : Fragment() {
             .addOnFailureListener { }
         var inferenceTime = SystemClock.uptimeMillis() - startTime
         Log.i("CameraFragment", "Running entire classifier function & display took $inferenceTime ms")
+        */
 
 
-        /*
-        * val startTime = SystemClock.uptimeMillis()
+
+        val startTime = SystemClock.uptimeMillis()
         var resultText = tfLiteClassifier.classify(bitmapBuffer, imageRotation)
-        var inferenceTime = SystemClock.uptimeMillis() - startTime
-        Log.i("CameraFragment", "Running entire classifier function took $inferenceTime ms")
         activity?.runOnUiThread{
             fragmentCameraBinding.predictedTextView?.text = resultText
             fragmentCameraBinding.predictedTextView?.invalidate()
             fragmentCameraBinding.predictedTextView?.requestLayout()
         }
-        * */
+
+        var inferenceTime = SystemClock.uptimeMillis() - startTime
+        Log.i("CameraFragment", "Running entire classifier function took $inferenceTime ms")
+
 
         image.close()
 

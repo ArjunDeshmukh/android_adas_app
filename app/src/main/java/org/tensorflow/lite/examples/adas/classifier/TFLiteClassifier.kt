@@ -96,18 +96,7 @@ open class TFLiteClassifier(private val context: Context) {
         return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
     }
 
-    @Throws(IOException::class)
-    fun loadLines(context: Context, filename: String): ArrayList<String> {
-        val s = Scanner(InputStreamReader(context.assets.open(filename)))
-        val labels = ArrayList<String>()
-        while (s.hasNextLine()) {
-            labels.add(s.nextLine())
-        }
-        s.close()
-        return labels
-    }
-
-    private fun classify(bitmap: Bitmap, imageRotation: Int): String {
+    fun classify(bitmap: Bitmap, imageRotation: Int): String {
 
         check(isInitialized) { "TF Lite Interpreter is not initialized yet." }
         val byteBufferArray = createModelInput(bitmap, imageRotation)
@@ -125,11 +114,20 @@ open class TFLiteClassifier(private val context: Context) {
         //val detections = getBoundingBoxesClasses(outputArray)
         //val nms_detections = nms(detections)
         //var index = getMaxResultFrmDetections(detections)
+
+        /*Every element of nmsBoxes: [xCenter, yCenter, Width, Height, Confidence, MaxClassProb, ClassIndex]*/
+        val nmsBoxes = nmsFrmArray(outputArray)
         val index = getMaxResultFrmArray(outputArray)
         endTime = SystemClock.uptimeMillis()
         val inferenceTime2 = endTime - startTime
 
-        return "Prediction is ${labels[index]}\nInference Time $inferenceTime ms, Other processes take $inferenceTime2 ms"
+        return if(index in 0..79) {
+            "Prediction is ${labels[index]}\nInference Time $inferenceTime ms, Other processes take $inferenceTime2 ms"
+        } else {
+            "No Prediction\nInference Time $inferenceTime ms, Other processes take $inferenceTime2 ms"
+        }
+
+
     }
 
     private fun createModelOutputYOLONMS(): MutableMap<Int, Any> {
@@ -187,7 +185,7 @@ open class TFLiteClassifier(private val context: Context) {
         var maxClassProb: Float
         var detectedClass: Int
         var maxProbability: Float = 0F
-        var labelIndex: Int = 0
+        var labelIndex: Int = -1
         var confidence: Float
         var confidenceInClass: Float
 
@@ -199,7 +197,7 @@ open class TFLiteClassifier(private val context: Context) {
             confidenceInClass = maxClassProb*confidence
             if(maxClassProb <= 1.0F && confidence<= 1.0F && result[0][i][2] > 0.1F && result[0][i][3] > 0.1F)
             {
-                if(confidenceInClass > maxProbability)
+                if(confidenceInClass > maxProbability && maxClassProb > OBJ_MINI_CONFIDENCE)
                 {
                     labelIndex = detectedClass
                     maxProbability = confidenceInClass
@@ -211,7 +209,7 @@ open class TFLiteClassifier(private val context: Context) {
     }
 
 
-    private fun nms(list: ArrayList<Detection>): ArrayList<Detection>? {
+    private fun nmsFrmDet(list: ArrayList<Detection>): ArrayList<Detection>? {
         val nmsList: ArrayList<Detection> = ArrayList<Detection>()
         for (k in labels.indices) {
             //1.find max confidence per class
@@ -244,6 +242,82 @@ open class TFLiteClassifier(private val context: Context) {
             }
         }
         return nmsList
+    }
+
+    private fun nmsFrmArray(result: Array<Array<FloatArray>>): MutableList<FloatArray> {
+        var confidences = result[0].map { it[4] }
+        val nonZeroConfIndices = confidences.mapIndexed { index, _ -> index }
+            .filter { index -> confidences[index] != 0.0F }
+        if (nonZeroConfIndices.isEmpty()) return mutableListOf()
+
+        confidences = nonZeroConfIndices.map { index -> confidences[index] }
+        val classProbs = nonZeroConfIndices.map { index -> result[0][index] }
+            .map { it.sliceArray(5 until it.size) }
+        val maxClassProbs = classProbs.map { it.maxOrNull() ?: 0.0f }
+        val classIndices = classProbs.zip(maxClassProbs) { a, b -> a.indexOfFirst { it == b } }
+        val totalProbs = confidences.zip(maxClassProbs) { a, b -> a * b }
+
+        val sortedProbIndices: MutableList<Int> =
+            totalProbs.indices.sortedWith(compareByDescending { totalProbs[it] }) as MutableList<Int>
+
+        val widths = nonZeroConfIndices.map { index -> result[0][index] }.map { it[2] }
+        val heights = nonZeroConfIndices.map { index -> result[0][index] }.map { it[3] }
+        val xCenter = nonZeroConfIndices.map { index -> result[0][index] }.map { it[0] }
+        val yCenter = nonZeroConfIndices.map { index -> result[0][index] }.map { it[1] }
+
+        val nmsBoxes : MutableList<FloatArray> = mutableListOf()
+        var classIndex: Int
+        var sortedProbIndex: Int
+        var sortedProbIndex2: Int
+        var bbox: RectF
+        var bbox2: RectF
+
+        while (sortedProbIndices.isNotEmpty()) {
+            sortedProbIndex = sortedProbIndices[0]
+
+            nmsBoxes.add(floatArrayOf(xCenter[sortedProbIndex], yCenter[sortedProbIndex], widths[sortedProbIndex], heights[sortedProbIndex],
+                confidences[sortedProbIndex], maxClassProbs[sortedProbIndex],
+                classIndices[sortedProbIndex].toFloat()
+            ))
+            sortedProbIndices.remove(sortedProbIndex)
+
+            classIndex = classIndices[sortedProbIndex]
+            bbox = RectF(
+                0f.coerceAtLeast(xCenter[sortedProbIndex] - widths[sortedProbIndex] / 2),
+                0f.coerceAtLeast(yCenter[sortedProbIndex] - heights[sortedProbIndex] / 2),
+                (inputImageWidth - 1).toFloat()
+                    .coerceAtMost(xCenter[sortedProbIndex] + widths[sortedProbIndex] / 2),
+                (inputImageHeight - 1).toFloat()
+                    .coerceAtMost(yCenter[sortedProbIndex] + heights[sortedProbIndex] / 2)
+            )
+
+            var j = 0
+            while(j < sortedProbIndices.size) {
+
+                sortedProbIndex2 = sortedProbIndices[j++]
+
+                if (classIndex == classIndices[sortedProbIndex2]) {
+
+                    bbox2 = RectF(
+                        0f.coerceAtLeast(xCenter[sortedProbIndex2] - widths[sortedProbIndex2] / 2),
+                        0f.coerceAtLeast(yCenter[sortedProbIndex2] - heights[sortedProbIndex2] / 2),
+                        (inputImageWidth - 1).toFloat()
+                            .coerceAtMost(xCenter[sortedProbIndex2] + widths[sortedProbIndex2] / 2),
+                        (inputImageHeight - 1).toFloat()
+                            .coerceAtMost(yCenter[sortedProbIndex2] + heights[sortedProbIndex2] / 2)
+                    )
+
+                    if(box_iou(bbox, bbox2) >= NMS_THRESHOLD){
+                        sortedProbIndices.remove(sortedProbIndex2)
+                        j--
+                    }
+                }
+
+            }
+
+        }
+
+        return nmsBoxes
     }
 
     private fun getBoundingBoxesClasses(outputArray: Array<Array<FloatArray>>): ArrayList<Detection> {
@@ -305,8 +379,11 @@ open class TFLiteClassifier(private val context: Context) {
                     oup_scale * ((outData.get(index++).toInt() and 0xFF) - oup_zero_point)
             }
             // Denormalize xywh
-            for (j in 0..3) {
-                out[0][i][j] *= modelInputSize.toFloat()
+            for (j in listOf(0, 2)) {
+                out[0][i][j] *= inputImageWidth.toFloat()
+            }
+            for (j in listOf(1, 3)) {
+                out[0][i][j] *= inputImageHeight.toFloat()
             }
         }
 
@@ -393,6 +470,17 @@ open class TFLiteClassifier(private val context: Context) {
         private const val IMAGE_MEAN = 127.5f
         private const val IMAGE_STD = 127.5f
         private const val OBJ_MINI_CONFIDENCE = 0.2F
-        private const val NMS_THRESHOLD = 0.6F
+        private const val NMS_THRESHOLD = 0.5F
+
+        @Throws(IOException::class)
+        fun loadLines(context: Context, filename: String): ArrayList<String> {
+            val s = Scanner(InputStreamReader(context.assets.open(filename)))
+            val labels = ArrayList<String>()
+            while (s.hasNextLine()) {
+                labels.add(s.nextLine())
+            }
+            s.close()
+            return labels
+        }
     }
 }
