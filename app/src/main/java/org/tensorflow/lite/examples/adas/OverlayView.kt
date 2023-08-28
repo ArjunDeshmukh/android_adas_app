@@ -36,8 +36,8 @@ class OverlayView(context: Context?, attrs: AttributeSet?) : View(context, attrs
     private var boxPaint = Paint()
     private var textBackgroundPaint = Paint()
     private var textPaint = Paint()
-    private var inputImageWidth: Int = 320
-    private var inputImageHeight: Int = 320
+    private var inputImageWidth: Int = 640
+    private var inputImageHeight: Int = 640
     private var labels = ArrayList<String>()
 
     private var scaleFactor: Float = 1f
@@ -98,7 +98,7 @@ class OverlayView(context: Context?, attrs: AttributeSet?) : View(context, attrs
             // Create text to display alongside detected objects
             val drawableText =
                 labels[result[6].toInt()] + " " +
-                        String.format("%.2f", result[5]*result[4])
+                        String.format("%.2f", result[5])
 
             // Draw rect behind display text
             textBackgroundPaint.getTextBounds(drawableText, 0, drawableText.length, bounds)
@@ -127,6 +127,10 @@ class OverlayView(context: Context?, attrs: AttributeSet?) : View(context, attrs
         // PreviewView is in FILL_START mode. So we need to scale up the bounding box to match with
         // the size that the captured images will be displayed.
         scaleFactor = max(width * 1f / imageWidth, height * 1f / imageHeight)
+
+        inputImageWidth = imageWidth
+        inputImageHeight = imageHeight
+
     }
 
     companion object {

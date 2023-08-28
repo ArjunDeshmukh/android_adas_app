@@ -34,6 +34,7 @@ import androidx.camera.core.AspectRatio
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888
 import androidx.camera.core.ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageProxy
@@ -176,7 +177,7 @@ class CameraFragment : Fragment() {
                 .setTargetAspectRatio(AspectRatio.RATIO_4_3)
                 .setTargetRotation(fragmentCameraBinding.viewFinder.display.rotation)
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .setOutputImageFormat(OUTPUT_IMAGE_FORMAT_YUV_420_888)
+                .setOutputImageFormat(OUTPUT_IMAGE_FORMAT_RGBA_8888)
                 .build()
                 // The analyzer can then be assigned to the instance
                 .also {
@@ -237,35 +238,56 @@ class CameraFragment : Fragment() {
 
     private fun detectObjects(image: ImageProxy) {
         // Copy out RGB bits to the shared bitmap buffer
-        //image.use { bitmapBuffer.copyPixelsFromBuffer(image.planes[0].buffer) }
-        bitmapBuffer = image.toBitmap()
+        image.use { bitmapBuffer.copyPixelsFromBuffer(image.planes[0].buffer) }
+        //bitmapBuffer = image.toBitmap()
 
         val imageRotation = image.imageInfo.rotationDegrees
 
         /*
-        val startTime = SystemClock.uptimeMillis()
+        * val startTime = SystemClock.uptimeMillis()
         tfLiteClassifier
             .classifyAsync(bitmapBuffer, imageRotation)
-            .addOnSuccessListener { resultText ->
+            ?.addOnSuccessListener { nmsBoxes ->
                 activity?.runOnUiThread{
-                    fragmentCameraBinding.predictedTextView?.text = resultText
-                    fragmentCameraBinding.predictedTextView.invalidate()
-                    fragmentCameraBinding.predictedTextView?.requestLayout()
+                    // Pass necessary information to OverlayView for drawing on the canvas
+                    fragmentCameraBinding.overlay.setResults(
+                        nmsBoxes,
+                        TFLiteClassifier.inputImageHeight,
+                        TFLiteClassifier.inputImageWidth
+                    )
+
+                    // Force a redraw
+                    fragmentCameraBinding.overlay.invalidate()
+
                 }
             }
-            .addOnFailureListener { }
+            ?.addOnFailureListener { }
         var inferenceTime = SystemClock.uptimeMillis() - startTime
         Log.i("CameraFragment", "Running entire classifier function & display took $inferenceTime ms")
-        */
+        * */
+
 
 
 
         val startTime = SystemClock.uptimeMillis()
-        var resultText = tfLiteClassifier.classify(bitmapBuffer, imageRotation)
+        //var resultText = tfLiteClassifier.classify(bitmapBuffer, imageRotation)
+        //activity?.runOnUiThread{
+        //    fragmentCameraBinding.predictedTextView?.text = resultText
+        //    fragmentCameraBinding.predictedTextView?.invalidate()
+        //    fragmentCameraBinding.predictedTextView?.requestLayout()
+        //}
+        val nmsBoxes = tfLiteClassifier.findBoundingBoxes(bitmapBuffer, imageRotation)
         activity?.runOnUiThread{
-            fragmentCameraBinding.predictedTextView?.text = resultText
-            fragmentCameraBinding.predictedTextView?.invalidate()
-            fragmentCameraBinding.predictedTextView?.requestLayout()
+            // Pass necessary information to OverlayView for drawing on the canvas
+            fragmentCameraBinding.overlay.setResults(
+                nmsBoxes,
+                TFLiteClassifier.inputImageHeight,
+                TFLiteClassifier.inputImageWidth
+            )
+
+            // Force a redraw
+            fragmentCameraBinding.overlay.invalidate()
+
         }
 
         var inferenceTime = SystemClock.uptimeMillis() - startTime

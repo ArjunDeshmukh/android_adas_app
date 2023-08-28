@@ -12,6 +12,8 @@ import com.google.android.gms.tasks.Tasks.call
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.Tensor
 import org.tensorflow.lite.gpu.GpuDelegate
+import org.tensorflow.lite.support.image.TensorImage
+import org.tensorflow.lite.support.image.ImageProcessor
 import java.io.FileInputStream
 import java.io.IOException
 import java.io.InputStreamReader
@@ -21,6 +23,7 @@ import java.util.*
 import java.util.concurrent.Callable
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+
 
 open class TFLiteClassifier(private val context: Context) {
 
@@ -34,8 +37,8 @@ open class TFLiteClassifier(private val context: Context) {
 
     private val executorService: ExecutorService = Executors.newFixedThreadPool(2)//Executors.newCachedThreadPool()
 
-    private var inputImageWidth: Int = 0
-    private var inputImageHeight: Int = 0
+    //private var inputImageWidth: Int = 0
+    //private var inputImageHeight: Int = 0
     private var modelInputSize: Int = 0
 
     private var inp_scale: Float = 0.0F
@@ -83,6 +86,7 @@ open class TFLiteClassifier(private val context: Context) {
         this.oup_zero_point = oupten.quantizationParams().zeroPoint
         this.num_output_boxes = oupten.shape()[1]
 
+
         isInitialized = true
     }
 
@@ -104,7 +108,7 @@ open class TFLiteClassifier(private val context: Context) {
         val outputMap = createModelOutputYOLODefault()
 
         var startTime = SystemClock.uptimeMillis()
-        interpreter?.runForMultipleInputsOutputs(byteBufferArray, outputMap)
+        interpreter?.runForMultipleInputsOutputs(byteBufferArray as Array<out Any>, outputMap)
         var endTime = SystemClock.uptimeMillis()
         val inferenceTime = endTime - startTime
 
@@ -130,6 +134,29 @@ open class TFLiteClassifier(private val context: Context) {
 
     }
 
+    fun findBoundingBoxes(bitmap: Bitmap, imageRotation: Int): MutableList<FloatArray> {
+
+        check(isInitialized) { "TF Lite Interpreter is not initialized yet." }
+        val byteBufferArray = createModelInput(bitmap, imageRotation)
+        val outputMap = createModelOutputYOLODefault()
+
+        var startTime = SystemClock.uptimeMillis()
+        interpreter?.runForMultipleInputsOutputs(byteBufferArray as Array<out Any>, outputMap)
+        var endTime = SystemClock.uptimeMillis()
+        val inferenceTime = endTime - startTime
+
+        startTime = SystemClock.uptimeMillis()
+        val outData: ByteBuffer = outputMap[0] as ByteBuffer
+        val outputArray = getOutArrayFromOutBuffer(outData)
+        /*Every element of nmsBoxes: [xCenter, yCenter, Width, Height, Confidence, MaxClassProb, ClassIndex]*/
+        val nmsBoxes = nmsFrmArray(outputArray)
+        endTime = SystemClock.uptimeMillis()
+        val inferenceTime2 = endTime - startTime
+
+        return nmsBoxes
+
+    }
+
     private fun createModelOutputYOLONMS(): MutableMap<Int, Any> {
         val bbox = Array(1) {Array(num_output_boxes) {FloatArray(labels.size + 5) } }
         val num_bbox = IntArray(1)
@@ -146,13 +173,13 @@ open class TFLiteClassifier(private val context: Context) {
     }
 
     private fun createModelOutputYOLODefault(): MutableMap<Int, Any> {
-        val outBuffer: ByteBuffer = ByteBuffer.allocateDirect(1 * 6300 * 85)
+        val outBuffer: ByteBuffer = ByteBuffer.allocateDirect(1 * num_output_boxes * 85)
         val outputMap: MutableMap<Int, Any> = HashMap<Int, Any>()
         outputMap[0] = outBuffer
         return outputMap
     }
 
-    private fun createModelInput(bitmap: Bitmap, imageRotation: Int): Array<ByteBuffer> {
+    private fun createModelInput(bitmap: Bitmap, imageRotation: Int): Any {
         val resizedImage =
             Bitmap.createScaledBitmap(bitmap, inputImageWidth, inputImageHeight, true)
         var matrix: Matrix = Matrix()
@@ -163,7 +190,7 @@ open class TFLiteClassifier(private val context: Context) {
         )
         val byteBuffer = convertBitmapToByteBuffer(rotatedBitmap)
 
-        return arrayOf(byteBuffer)
+        return byteBuffer
 
     }
 
@@ -376,7 +403,7 @@ open class TFLiteClassifier(private val context: Context) {
         for (i in 0 until num_output_boxes) {
             for (j in 0 until labels.size + 5) {
                 out[0][i][j] =
-                    oup_scale * ((outData.get(index++).toInt() and 0xFF) - oup_zero_point)
+                    oup_scale * (((outData.get(index++).toUInt() and 255u).toFloat()) - oup_zero_point)
             }
             // Denormalize xywh
             for (j in listOf(0, 2)) {
@@ -390,8 +417,8 @@ open class TFLiteClassifier(private val context: Context) {
         return out
     }
 
-    fun classifyAsync(bitmap: Bitmap, imageRotation: Int): Task<String> {
-        return call(executorService) { classify(bitmap, imageRotation) }
+    fun classifyAsync(bitmap: Bitmap, imageRotation: Int): Task<MutableList<FloatArray>>? {
+        return call(executorService) { findBoundingBoxes(bitmap, imageRotation) }
     }
 
     fun close() {
@@ -418,13 +445,16 @@ open class TFLiteClassifier(private val context: Context) {
         val pixels = IntArray(inputImageWidth * inputImageHeight)
         bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
         var pixel = 0
+        var alpha = 0
         for (i in 0 until inputImageWidth) {
             for (j in 0 until inputImageHeight) {
                 val pixelVal = pixels[pixel++]
 
-                byteBuffer.put(((((pixelVal shr 16) and 0xFF) - IMAGE_MEAN) / IMAGE_STD / inp_scale + inp_zero_point).toInt().toByte())
-                byteBuffer.put(((((pixelVal shr 8) and 0xFF) - IMAGE_MEAN) / IMAGE_STD / inp_scale + inp_zero_point).toInt().toByte())
-                byteBuffer.put((((pixelVal and 0xFF) - IMAGE_MEAN) / IMAGE_STD / inp_scale + inp_zero_point).toInt().toByte())
+                alpha = ((pixelVal shr 24) and 0xFF)
+                byteBuffer.put(((((pixelVal shr 16) and 0xFF) - IMAGE_MEAN) / IMAGE_STD / inp_scale + inp_zero_point).toUInt().toByte())
+                byteBuffer.put(((((pixelVal shr 8) and 0xFF) - IMAGE_MEAN) / IMAGE_STD / inp_scale + inp_zero_point).toUInt().toByte())
+                byteBuffer.put((((pixelVal and 0xFF) - IMAGE_MEAN) / IMAGE_STD / inp_scale + inp_zero_point).toUInt().toByte())
+
             }
         }
         bitmap.recycle()
@@ -467,10 +497,12 @@ open class TFLiteClassifier(private val context: Context) {
         private const val TAG = "TfliteClassifier"
         private const val FLOAT_TYPE_SIZE = 4
         private const val CHANNEL_SIZE = 3
-        private const val IMAGE_MEAN = 127.5f
-        private const val IMAGE_STD = 127.5f
+        private const val IMAGE_MEAN = 0f
+        private const val IMAGE_STD = 255f
         private const val OBJ_MINI_CONFIDENCE = 0.2F
         private const val NMS_THRESHOLD = 0.5F
+        var inputImageWidth: Int = 0
+        var inputImageHeight: Int = 0
 
         @Throws(IOException::class)
         fun loadLines(context: Context, filename: String): ArrayList<String> {

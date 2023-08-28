@@ -122,6 +122,7 @@ dependencies {
     implementation 'org.tensorflow:tensorflow-lite:2.13.0'
     implementation 'org.tensorflow:tensorflow-lite-gpu:2.13.0'
     implementation 'org.tensorflow:tensorflow-lite-select-tf-ops:2.3.0'
+    implementation 'org.tensorflow:tensorflow-lite-support:0.1.0'
 
     implementation 'org.apache.commons:commons-math3:3.6.1'
 
