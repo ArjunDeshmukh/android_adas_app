@@ -18,7 +18,7 @@ open class Tracker {
     val tracked = LinkedHashMap<Int, KalmanTrack>()
     private val disappeared = LinkedHashMap<Int, Int>()
     private val numContDetections = LinkedHashMap<Int, Int>()
-    private var maxDisappeared = 5
+    private var maxDisappeared = 3
     private var matureContDetScans = 3
     private var metric: Metric?
     private var objConfThreshold: Double = 0.50
