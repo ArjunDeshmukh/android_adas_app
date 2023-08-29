@@ -21,7 +21,7 @@ open class Tracker {
     private var maxDisappeared = 3
     private var matureContDetScans = 3
     private var metric: Metric?
-    private var objConfThreshold: Double = 0.50
+    private var objConfThreshold: Double = 0.4
 
     constructor(metric: Metric?, matchingThreshold: Double?, maxDisappeared: Int, objConfThreshold: Double) {
         this.metric = metric

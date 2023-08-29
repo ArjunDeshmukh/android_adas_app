@@ -39,6 +39,7 @@ class KalmanTrack(initial_state: DoubleArray, category: Category) {
             4, 4)  // initial velocity error covariance
         kf.P = kf.P.scalarMultiply(10.0) // initial location error covariance
 
+        kf.Q = kf.Q.scalarMultiply(10.0)
         kf.Q.multiplyEntry(6, 6, 0.01) // process noise
         kf.Q.setSubMatrix(kf.Q.getSubMatrix(4, 6, 4, 6).scalarMultiply(0.01).data,
             4, 4) // process noise
