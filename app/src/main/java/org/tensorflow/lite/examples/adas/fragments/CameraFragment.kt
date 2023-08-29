@@ -267,8 +267,6 @@ class CameraFragment : Fragment() {
         * */
 
 
-
-
         val startTime = SystemClock.uptimeMillis()
         //var resultText = tfLiteClassifier.classify(bitmapBuffer, imageRotation)
         //activity?.runOnUiThread{

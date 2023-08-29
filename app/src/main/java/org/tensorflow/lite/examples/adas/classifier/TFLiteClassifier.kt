@@ -9,11 +9,16 @@ import android.os.SystemClock
 import android.util.Log
 import com.google.android.gms.tasks.Task
 import com.google.android.gms.tasks.Tasks.call
+import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.Tensor
 import org.tensorflow.lite.gpu.GpuDelegate
+import org.tensorflow.lite.support.common.ops.CastOp
+import org.tensorflow.lite.support.common.ops.NormalizeOp
 import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.image.ImageProcessor
+import org.tensorflow.lite.support.image.ops.ResizeOp
+import org.tensorflow.lite.support.image.ops.Rot90Op
 import java.io.FileInputStream
 import java.io.IOException
 import java.io.InputStreamReader
@@ -45,8 +50,9 @@ open class TFLiteClassifier(private val context: Context) {
     private var inp_zero_point: Int = 0
     private var oup_scale: Float = 0.0F
     private var oup_zero_point: Int = 0
-
     private var num_output_boxes: Int = 0
+
+    private lateinit var inputImageProcessorQuantized: ImageProcessor
 
     fun initialize(): Task<Void> {
         return call(
@@ -86,7 +92,6 @@ open class TFLiteClassifier(private val context: Context) {
         this.oup_zero_point = oupten.quantizationParams().zeroPoint
         this.num_output_boxes = oupten.shape()[1]
 
-
         isInitialized = true
     }
 
@@ -104,6 +109,7 @@ open class TFLiteClassifier(private val context: Context) {
 
         check(isInitialized) { "TF Lite Interpreter is not initialized yet." }
         val byteBufferArray = createModelInput(bitmap, imageRotation)
+
 
         val outputMap = createModelOutputYOLODefault()
 
@@ -138,10 +144,17 @@ open class TFLiteClassifier(private val context: Context) {
 
         check(isInitialized) { "TF Lite Interpreter is not initialized yet." }
         val byteBufferArray = createModelInput(bitmap, imageRotation)
+        var tensorImage = TensorImage.fromBitmap( bitmap )
+        inputImageProcessorQuantized = ImageProcessor.Builder()
+            .add( ResizeOp( inputImageHeight , inputImageWidth , ResizeOp.ResizeMethod.BILINEAR ) )
+            .add(Rot90Op(-imageRotation / 90))
+            .add( CastOp( DataType.UINT8 ) )
+            .build()
+        tensorImage = inputImageProcessorQuantized.process( tensorImage )
         val outputMap = createModelOutputYOLODefault()
 
         var startTime = SystemClock.uptimeMillis()
-        interpreter?.runForMultipleInputsOutputs(byteBufferArray as Array<out Any>, outputMap)
+        interpreter?.runForMultipleInputsOutputs(arrayOf(tensorImage.buffer), outputMap)
         var endTime = SystemClock.uptimeMillis()
         val inferenceTime = endTime - startTime
 
@@ -280,17 +293,30 @@ open class TFLiteClassifier(private val context: Context) {
         confidences = nonZeroConfIndices.map { index -> confidences[index] }
         val classProbs = nonZeroConfIndices.map { index -> result[0][index] }
             .map { it.sliceArray(5 until it.size) }
-        val maxClassProbs = classProbs.map { it.maxOrNull() ?: 0.0f }
-        val classIndices = classProbs.zip(maxClassProbs) { a, b -> a.indexOfFirst { it == b } }
-        val totalProbs = confidences.zip(maxClassProbs) { a, b -> a * b }
+        var maxClassProbs = classProbs.map { it.maxOrNull() ?: 0.0f }
+        var classIndices = classProbs.zip(maxClassProbs) { a, b -> a.indexOfFirst { it == b } }
+        var totalProbs = confidences.zip(maxClassProbs) { a, b -> a * b }
+        var widths = nonZeroConfIndices.map { index -> result[0][index] }.map { it[2] }
+        var heights = nonZeroConfIndices.map { index -> result[0][index] }.map { it[3] }
+        var xCenter = nonZeroConfIndices.map { index -> result[0][index] }.map { it[0] }
+        var yCenter = nonZeroConfIndices.map { index -> result[0][index] }.map { it[1] }
 
-        val sortedProbIndices: MutableList<Int> =
+        val highProbIndices = totalProbs.mapIndexed { index, _ -> index }
+            .filter { index -> totalProbs[index]  > OBJ_MINI_CONFIDENCE }
+        if (highProbIndices.isEmpty()) return mutableListOf()
+
+        totalProbs = highProbIndices.map{ index -> totalProbs[index]}
+        widths = highProbIndices.map { index -> widths[index] }
+        heights = highProbIndices.map { index -> heights[index] }
+        xCenter = highProbIndices.map { index -> xCenter[index] }
+        yCenter = highProbIndices.map { index -> yCenter[index] }
+        confidences = highProbIndices.map { index -> confidences[index] }
+        maxClassProbs = highProbIndices.map { index -> maxClassProbs[index] }
+        classIndices = highProbIndices.map { index -> classIndices[index] }
+
+
+        var sortedProbIndices: MutableList<Int> =
             totalProbs.indices.sortedWith(compareByDescending { totalProbs[it] }) as MutableList<Int>
-
-        val widths = nonZeroConfIndices.map { index -> result[0][index] }.map { it[2] }
-        val heights = nonZeroConfIndices.map { index -> result[0][index] }.map { it[3] }
-        val xCenter = nonZeroConfIndices.map { index -> result[0][index] }.map { it[0] }
-        val yCenter = nonZeroConfIndices.map { index -> result[0][index] }.map { it[1] }
 
         val nmsBoxes : MutableList<FloatArray> = mutableListOf()
         var classIndex: Int

@@ -75,14 +75,6 @@ class OverlayView(context: Context?, attrs: AttributeSet?) : View(context, attrs
         super.draw(canvas)
 
         for (result in results) {
-            val boundingBox = RectF(
-                0f.coerceAtLeast(result[0] - result[2] / 2),
-                0f.coerceAtLeast(result[1] - result[3] / 2),
-                (inputImageWidth - 1).toFloat()
-                    .coerceAtMost(result[0] + result[2] / 2),
-                (inputImageHeight - 1).toFloat()
-                    .coerceAtMost(result[1] + result[3] / 2)
-            )
 
             val top = 0f.coerceAtLeast(result[1] - result[3] / 2) * scaleFactor
             val bottom = (inputImageHeight - 1).toFloat()
@@ -126,6 +118,7 @@ class OverlayView(context: Context?, attrs: AttributeSet?) : View(context, attrs
 
         // PreviewView is in FILL_START mode. So we need to scale up the bounding box to match with
         // the size that the captured images will be displayed.
+
         scaleFactor = max(width * 1f / imageWidth, height * 1f / imageHeight)
 
         inputImageWidth = imageWidth
