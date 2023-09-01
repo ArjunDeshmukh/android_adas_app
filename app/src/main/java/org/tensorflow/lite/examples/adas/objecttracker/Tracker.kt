@@ -16,14 +16,12 @@ open class Tracker {
     private var nextTrackID = 0
     private var matchingThreshold: Double? = null
     val tracked = LinkedHashMap<Int, KalmanTrack>()
-    private val disappeared = LinkedHashMap<Int, Int>()
-    private val numContDetections = LinkedHashMap<Int, Int>()
-    private var maxDisappeared = 3
+    private var maxDisappeared: Int? = 10
     private var matureContDetScans = 3
     private var metric: Metric?
-    private var objConfThreshold: Double = 0.4
+    private var objConfThreshold: Double? = 0.5
 
-    constructor(metric: Metric?, matchingThreshold: Double?, maxDisappeared: Int, objConfThreshold: Double) {
+    constructor(metric: Metric?, matchingThreshold: Double?, maxDisappeared: Int?, objConfThreshold: Double?) {
         this.metric = metric
         this.matchingThreshold = matchingThreshold
         this.maxDisappeared = maxDisappeared
@@ -32,24 +30,26 @@ open class Tracker {
 
     fun register(state: RealVector?, category: Category) {
         this.tracked[this.nextTrackID] = KalmanTrack(state!!.toArray(), category)
-        this.disappeared[this.nextTrackID] = 0
-        this.numContDetections[this.nextTrackID] = 1
         this.nextTrackID++
     }
 
     fun deregister(objectID: Int) {
         this.tracked.remove(objectID)
-        this.disappeared.remove(objectID)
-        this.numContDetections.remove(objectID)
     }
 
     fun handleNoDetections(): LinkedHashMap<Int, KalmanTrack> {
-        for (trackID in this.disappeared.keys) {
-            this.disappeared[trackID] = this.disappeared[trackID]!! + 1
-            if (this.disappeared[trackID]!! > this.maxDisappeared) {
-                this.deregister(trackID)
+
+        if(this.tracked.isNotEmpty())
+        {
+            for (trackID in this.tracked.keys) {
+                this.tracked[trackID]?.incrementDisappeared()
+                this.tracked[trackID]?.resetContDet()
+                if (this.tracked[trackID]?.getDisappeared()!! > this.maxDisappeared!!) {
+                    this.deregister(trackID)
+                }
             }
         }
+
         return this.tracked
     }
 
@@ -59,16 +59,6 @@ open class Tracker {
             if(track.getObjectStatus() != TrackStatus.NEW){
                 tracks.add(Triple(ID, MatrixUtils.createRealVector(track.project()), track.getCategory()))
             }
-        }
-
-        val objectsList = ArrayList<ObjectClass>()
-        for ((ID, track) in this.tracked) {
-            var obj = ObjectClass()
-            obj.ID = ID
-            obj.top_left_bottom_right_coord = MatrixUtils.createRealVector(track.project())
-            obj.category = track.getCategory()
-            obj.filtWidth = track.filtWidth()
-            objectsList.add(obj)
         }
 
         return tracks
@@ -87,8 +77,8 @@ open class Tracker {
             } else if (abs(D[row][col])  > this.matchingThreshold!! && abs(D[row][col]) <= 1.0) {
                 val trackID = trackIDs[row]
                 this.tracked[trackID] = this.tracked[trackID]!!.update(detections[col])
-                this.disappeared[trackID] = 0
-                this.numContDetections[trackID] = this.numContDetections[trackID]!! + 1
+                this.tracked[trackID]?.resetDisappeared()
+                this.tracked[trackID]?.incrementContDet()
                 usedRows.add(row)
                 usedCols.add(col)
             }
@@ -98,15 +88,16 @@ open class Tracker {
         if (D.size >= D[0].size) {
             for (row in unusedRows) {
                 val objectID = trackIDs[row]
-                this.disappeared[objectID] = this.disappeared[objectID]!! + 1
-                this.numContDetections[objectID] = 0
-                if (this.disappeared[objectID]!! > this.maxDisappeared) {
+                this.tracked[objectID]?.incrementDisappeared()
+                this.tracked[objectID]?.resetContDet()
+                if (this.tracked[objectID]?.getDisappeared()!! > this.maxDisappeared!!) {
                     this.deregister(objectID)
                 }
+
             }
         } else {
             for (col in unusedCols) {
-                if (categories[col].score >= this.objConfThreshold)
+                if (categories[col].score >= this.objConfThreshold!!)
                     this.register(detections[col], categories[col])
             }
         }
@@ -115,8 +106,6 @@ open class Tracker {
     fun reset() {
         this.nextTrackID = 0
         this.tracked.clear()
-        this.disappeared.clear()
-        this.numContDetections.clear()
     }
 
     fun statusUpdate() {
@@ -124,18 +113,20 @@ open class Tracker {
             if(this.tracked[key]?.getObjectStatus()  == TrackStatus.NEW){
 
                 //Log.i("Tracker", "Track key: $track.key ")
-                if(this.numContDetections[key]!! >= this.matureContDetScans )
+                if(this.tracked[key]?.getContDet()!! >= this.matureContDetScans )
                 {
                     this.tracked[key]?.setObjectStatus(TrackStatus.MATURE)
                 }
             }
+
             if(this.tracked[key]?.getObjectStatus()  == TrackStatus.MATURE){
-                if(this.disappeared[key]!! > 0){
+                if(this.tracked[key]?.getDisappeared()!! > 0){
                     this.tracked[key]?.setObjectStatus(TrackStatus.COASTED)
                 }
             }
+
             if(this.tracked[key]?.getObjectStatus() == TrackStatus.COASTED){
-                if(this.disappeared[key]!! == 0) {
+                if(this.tracked[key]?.getDisappeared()!! == 0) {
                     this.tracked[key]?.setObjectStatus(TrackStatus.MATURE)
                 }
             }
@@ -164,14 +155,14 @@ open class Tracker {
     }
 }
 
-class KalmanTracker(private val metric: Metric = Metric("iou"), private val matchingThreshold: Double = 0.2) : Tracker(null, matchingThreshold, 10, 0.70) {
+class KalmanTracker(private val metric: Metric = Metric("iou"), private val matchingThreshold: Double, private val maxDisappeared: Int, private val objConfThreshold: Double) : Tracker(metric, matchingThreshold, maxDisappeared, objConfThreshold) {
     /**
      * Specialized tracker class which inherits from the basic Tracker class
      * Utilizes the KalmanFilter and the IoU metric for more robust bounding box associations
      */
     fun update(detections: List<RealVector>, categories: List<Category>): List<Triple<Int, RealVector, Category>> {
         if (detections.isEmpty()) {
-            return this.handleNoDetections().map { Triple(it.key, MatrixUtils.createRealVector(it.value.project()), it.value.getCategory()) }
+            return this.handleNoDetections().map { Triple(it.key, MatrixUtils.createRealVector(it.value.predict()), it.value.getCategory()) }
         }
         if (this.tracked.isEmpty()) {
             for (i in detections.indices) {
@@ -203,7 +194,7 @@ class KalmanTracker(private val metric: Metric = Metric("iou"), private val matc
     }
 
 
-    fun calcFiltWidths(): List<Float> {
+    fun calcFiltWidths(): List<Float?> {
         return tracked.values.map { track -> track.filtWidth() }
     }
 

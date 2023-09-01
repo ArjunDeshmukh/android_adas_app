@@ -73,7 +73,7 @@ class ObjectDetectorHelper(
 
     //private val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
     //private val ringtone = RingtoneManager.getRingtone(context, defaultSoundUri)
-    private var tracker = KalmanTracker()
+    private var tracker = KalmanTracker(matchingThreshold = 0.2, maxDisappeared = 10, objConfThreshold = 0.6)
 
     var toneGen1 = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
 
@@ -185,6 +185,7 @@ class ObjectDetectorHelper(
         val (tracks, filtWidths) = trackObjects(results)
         val trackedResults = trackerOPtoModelOP(tracks)
 
+
         inferenceTime = SystemClock.uptimeMillis() - inferenceTime
         objectDetectorListener?.onResults(
             trackedResults,
@@ -210,9 +211,9 @@ class ObjectDetectorHelper(
 
     }
 
-    private fun findAnObject(results:  MutableList<Detection>?, obj: String, filtWidths: List<Float>){
+    private fun findAnObject(results:  MutableList<Detection>?, obj: String, filtWidths: List<Float?>){
         // Find if specified object is present. If yes, take a picture
-        var obj_width: Float
+        var obj_width: Float?
         var obj_width_chng_ratio: Float = 0.0F
         var f_obj_detected: Boolean = false
         var timeGap: Long = 0L
@@ -231,20 +232,25 @@ class ObjectDetectorHelper(
 
                         obj_width = filtWidths[i]
 
-                        if(obj_width_prev != null && obj_width_prev != 0.0F){
-                            obj_width_chng_ratio = obj_width/ obj_width_prev!!
-                            count++
-                            val delta = obj_width - mean
-                            mean += delta / count
-                            val delta2 = obj_width - mean
-                            m2 += delta*delta2
-                        }
-                        else
+                        if(obj_width != null)
                         {
-                            count = 1
-                            mean = obj_width
-                            m2 = 0.0F
+                            if(obj_width_prev != null && obj_width_prev != 0.0F){
+                                obj_width_chng_ratio = obj_width/ obj_width_prev!!
+                                count++
+                                val delta = obj_width - mean
+                                mean += delta / count
+                                val delta2 = obj_width - mean
+                                m2 += delta*delta2
+                            }
+                            else
+                            {
+                                count = 1
+                                mean = obj_width
+                                m2 = 0.0F
+                            }
+
                         }
+
 
                         val standardDeviation: Float = if (count < 2) Float.NaN else sqrt(m2 / (count - 1).toFloat())
 
@@ -313,13 +319,13 @@ class ObjectDetectorHelper(
         }
     }
 
-    private fun trackObjects(results: MutableList<Detection>?):  Pair<List<Triple<Int, RealVector, Category>>, List<Float>>{
+    private fun trackObjects(results: MutableList<Detection>?):  Pair<List<Triple<Int, RealVector, Category>>, List<Float?>>{
 
         val (detections, categories) = modelOPtoTrackerIP(results)
 
         val tracks: List<Triple<Int, RealVector, Category>> = tracker.update(detections, categories)
 
-        val filtWidths: List<Float> = tracker.calcFiltWidths()
+        val filtWidths: List<Float?> = tracker.calcFiltWidths()
 
         return Pair(tracks, filtWidths)
 
