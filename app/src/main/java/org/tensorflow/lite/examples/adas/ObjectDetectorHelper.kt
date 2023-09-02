@@ -73,7 +73,7 @@ class ObjectDetectorHelper(
 
     //private val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
     //private val ringtone = RingtoneManager.getRingtone(context, defaultSoundUri)
-    private var tracker = KalmanTracker(matchingThreshold = 0.2, maxDisappeared = 10, objConfThreshold = 0.6)
+    private var tracker = KalmanTracker(matchingThreshold = 0.2, maxDisappeared = 3, objConfThreshold = 0.6)
 
     var toneGen1 = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
 

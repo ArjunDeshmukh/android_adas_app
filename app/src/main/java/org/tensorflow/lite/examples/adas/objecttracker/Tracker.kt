@@ -13,7 +13,6 @@ open class Tracker {
      * Parent class for the general Tracker case, intended for creating the basis for inheritance for specialized trackers.
      * Assumes the default use of KalmanFilter to assist tracking.
      */
-    private var nextTrackID = 0
     private var matchingThreshold: Double? = null
     val tracked = LinkedHashMap<Int, KalmanTrack>()
     private var maxDisappeared: Int? = 10
@@ -29,8 +28,30 @@ open class Tracker {
     }
 
     fun register(state: RealVector?, category: Category) {
-        this.tracked[this.nextTrackID] = KalmanTrack(state!!.toArray(), category)
-        this.nextTrackID++
+
+        if(this.tracked.isNotEmpty())
+        {
+            var trackID = 0
+            for(key in this.tracked.keys.sorted())
+            {
+                if(key == trackID)
+                {
+                    trackID++
+                }
+                else
+                {
+                    break
+                }
+            }
+
+            this.tracked[trackID] = KalmanTrack(state!!.toArray(), category)
+
+        }
+        else
+        {
+            this.tracked[0] = KalmanTrack(state!!.toArray(), category)
+        }
+
     }
 
     fun deregister(objectID: Int) {
@@ -41,12 +62,20 @@ open class Tracker {
 
         if(this.tracked.isNotEmpty())
         {
+            val keysToRemove = mutableListOf<Int>()
+            Log.d("Tracker", "Keys: ${this.tracked.keys}")
             for (trackID in this.tracked.keys) {
                 this.tracked[trackID]?.incrementDisappeared()
                 this.tracked[trackID]?.resetContDet()
                 if (this.tracked[trackID]?.getDisappeared()!! > this.maxDisappeared!!) {
-                    this.deregister(trackID)
+                    Log.d("Tracker", "Key: $trackID")
+                    keysToRemove.add(trackID)
                 }
+            }
+
+            // Remove the keys outside of the loop
+            for (key in keysToRemove) {
+                this.deregister(key)
             }
         }
 
@@ -104,7 +133,6 @@ open class Tracker {
     }
 
     fun reset() {
-        this.nextTrackID = 0
         this.tracked.clear()
     }
 
@@ -166,7 +194,10 @@ class KalmanTracker(private val metric: Metric = Metric("iou"), private val matc
         }
         if (this.tracked.isEmpty()) {
             for (i in detections.indices) {
-                this.register(detections[i], categories[i])
+                if(categories[i].score > objConfThreshold)
+                {
+                    this.register(detections[i], categories[i])
+                }
             }
         } else {
             this.associate(  detections.map { vector -> vector.toArray() }.toTypedArray(), categories)

@@ -98,13 +98,10 @@ class KalmanTrack(initial_state: DoubleArray, category: Category) {
 
 
     fun filtWidth(): Float? {
-        if (objStatus != TrackStatus.NEW)
-        {
-            return secondOrderFilter.process(sqrt((kf.x.toArray()[2] * kf.x.toArray()[3]).toFloat()))
-        }
-        else
-        {
-            return null
+        return if (objStatus != TrackStatus.NEW) {
+            secondOrderFilter.process(sqrt((kf.x.toArray()[2] * kf.x.toArray()[3]).toFloat()))
+        } else {
+            null
         }
 
     }
