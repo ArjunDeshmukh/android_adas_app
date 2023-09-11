@@ -11,12 +11,13 @@ import com.google.android.gms.tasks.Task
 import com.google.android.gms.tasks.Tasks.call
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
+import org.tensorflow.lite.InterpreterApi
 import org.tensorflow.lite.Tensor
 import org.tensorflow.lite.gpu.GpuDelegate
+import org.tensorflow.lite.gpu.GpuDelegateFactory
 import org.tensorflow.lite.support.common.ops.CastOp
-import org.tensorflow.lite.support.common.ops.NormalizeOp
-import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.image.ImageProcessor
+import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.image.ops.ResizeOp
 import org.tensorflow.lite.support.image.ops.Rot90Op
 import java.io.FileInputStream
@@ -32,7 +33,7 @@ import java.util.concurrent.Executors
 
 open class TFLiteClassifier(private val context: Context) {
 
-    private var interpreter: Interpreter? = null
+    private var interpreter: InterpreterApi? = null
     var isInitialized = false
         private set
 
@@ -70,9 +71,13 @@ open class TFLiteClassifier(private val context: Context) {
         val model = loadModelFile(assetManager, "yolov5s-int8.tflite")
 
         labels = loadLines(context, "coco.txt")
-        val options = Interpreter.Options()
 
-        val interpreter = Interpreter(model)
+        //val options = InterpreterApi.Options()
+        val options = Interpreter.Options()
+        options.numThreads = 4
+
+        //val interpreter = InterpreterApi.create(model, options)
+        val interpreter = Interpreter(model, options)
 
         val inputShape = interpreter.getInputTensor(0).shape()
         inputImageWidth = inputShape[1]
@@ -152,19 +157,25 @@ open class TFLiteClassifier(private val context: Context) {
             .build()
         tensorImage = inputImageProcessorQuantized.process( tensorImage )
         val outputMap = createModelOutputYOLODefault()
+        //val inputArray = createModelInputYOLONMS(tensorImage)
+        //val outputMap = createModelOutputYOLONMS()
 
         var startTime = SystemClock.uptimeMillis()
         interpreter?.runForMultipleInputsOutputs(arrayOf(tensorImage.buffer), outputMap)
+        //interpreter?.runForMultipleInputsOutputs(inputArray, outputMap)
         var endTime = SystemClock.uptimeMillis()
         val inferenceTime = endTime - startTime
+        Log.i("TFLiteClassifier", "Model Inference Time: $inferenceTime")
 
         startTime = SystemClock.uptimeMillis()
         val outData: ByteBuffer = outputMap[0] as ByteBuffer
         val outputArray = getOutArrayFromOutBuffer(outData)
         /*Every element of nmsBoxes: [xCenter, yCenter, Width, Height, Confidence, MaxClassProb, ClassIndex]*/
         val nmsBoxes = nmsFrmArray(outputArray)
+
         endTime = SystemClock.uptimeMillis()
         val inferenceTime2 = endTime - startTime
+        Log.i("TFLiteClassifier", "Time for NMS Calculation: $inferenceTime2")
 
         return nmsBoxes
 
@@ -185,8 +196,15 @@ open class TFLiteClassifier(private val context: Context) {
         return outputMap
     }
 
+    private fun createModelInputYOLONMS(tensorImage: TensorImage?): Array<Comparable<*>>? {
+
+        val inputArray = tensorImage?.let { arrayOf(it.buffer, 100, 100, 0.45, 0.25) }
+        return inputArray
+
+    }
+
     private fun createModelOutputYOLODefault(): MutableMap<Int, Any> {
-        val outBuffer: ByteBuffer = ByteBuffer.allocateDirect(1 * num_output_boxes * 85)
+        val outBuffer: ByteBuffer = ByteBuffer.allocateDirect(1 * num_output_boxes * num_output_boxes)
         val outputMap: MutableMap<Int, Any> = HashMap<Int, Any>()
         outputMap[0] = outBuffer
         return outputMap
@@ -452,10 +470,13 @@ open class TFLiteClassifier(private val context: Context) {
             executorService,
             Callable<String> {
                 interpreter?.close()
+                /*
                 if (gpuDelegate != null) {
                     gpuDelegate!!.close()
                     gpuDelegate = null
                 }
+                * */
+
 
                 Log.d(TAG, "Closed TFLite interpreter.")
                 null

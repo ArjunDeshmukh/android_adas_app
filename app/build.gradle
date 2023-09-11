@@ -121,6 +121,8 @@ dependencies {
 
     implementation 'org.tensorflow:tensorflow-lite:2.13.0'
     implementation 'org.tensorflow:tensorflow-lite-gpu:2.13.0'
+    implementation 'org.tensorflow:tensorflow-lite-gpu-api:2.13.0'
+    //implementation 'org.tensorflow:tensorflow-lite-gpu-delegate-plugin'
     implementation 'org.tensorflow:tensorflow-lite-select-tf-ops:2.3.0'
     implementation 'org.tensorflow:tensorflow-lite-support:0.1.0'
 
